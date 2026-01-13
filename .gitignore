@@ -1,0 +1,12 @@
+# Node / Vite
+node_modules
+dist
+.env
+.env.local
+
+# Supabase
+supabase/.temp
+supabase/.env
+
+# OS
+.DS_Store
