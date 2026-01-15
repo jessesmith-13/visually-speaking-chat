@@ -1,0 +1,253 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/ui/card';
+import { Button } from '@/ui/button';
+import { Badge } from '@/ui/badge';
+import { Calendar, Clock, Users, DollarSign, Trash2, Filter } from 'lucide-react';
+import { useApp } from '@/app/hooks';
+import { Event } from '@/features/events/types';
+import { format } from 'date-fns';
+import { toast } from 'sonner';
+
+export function EventsRoute() {
+  const navigate = useNavigate();
+  const { events, user, setCurrentEvent, removeEvent } = useApp();
+  const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'live' | 'cancelled'>('upcoming');
+
+  console.log('📋 [EVENTS ROUTE] Rendering with events:', events.length);
+  console.log('📋 [EVENTS ROUTE] Events:', events);
+
+  const handleEventClick = (event: Event) => {
+    setCurrentEvent(event);
+    navigate(`/events/${event.id}`);
+  };
+
+  const handleJoinEvent = (event: Event, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrentEvent(event);
+    navigate(`/room/${event.id}`);
+  };
+
+  const handleCancelEvent = async (event: Event, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!window.confirm(`Are you sure you want to cancel "${event.name}"? This will delete the event and all associated tickets.`)) {
+      return;
+    }
+    
+    setDeletingEventId(event.id);
+    
+    try {
+      await removeEvent(event.id);
+      toast.success('Event cancelled successfully');
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel event';
+      console.error('Error cancelling event:', error);
+      toast.error(errorMessage);
+    } finally {
+      setDeletingEventId(null);
+    }
+  };
+
+  const hasTicket = (eventId: string) => {
+    return user?.purchasedTickets.includes(eventId);
+  };
+
+  // Helper functions for event status
+  const isEventLive = (event: Event) => {
+    const now = new Date();
+    const eventStart = new Date(event.date);
+    const eventEnd = new Date(eventStart.getTime() + event.duration * 60000);
+    return now >= eventStart && now <= eventEnd;
+  };
+
+  const isEventPast = (event: Event) => {
+    const now = new Date();
+    const eventEnd = new Date(new Date(event.date).getTime() + event.duration * 60000);
+    return now > eventEnd;
+  };
+
+  const isEventUpcoming = (event: Event) => {
+    const now = new Date();
+    const eventStart = new Date(event.date);
+    return now < eventStart;
+  };
+
+  const filteredEvents = events.filter((event) => {
+    // "Live" shows only currently active events
+    if (activeTab === 'live') return isEventLive(event) && event.status !== 'cancelled';
+    // "Upcoming" includes both future events AND currently live events
+    if (activeTab === 'upcoming') return !isEventPast(event) && event.status !== 'cancelled';
+    // "Past" only includes events that have completely ended
+    if (activeTab === 'past') return isEventPast(event);
+    // "Cancelled" only includes events that have been cancelled
+    if (activeTab === 'cancelled') return event.status === 'cancelled';
+    return false;
+  });
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="container mx-auto px-4 py-12">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center mb-12">
+            <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              Upcoming Events
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400 text-lg">
+              Join our video events and connect with the deaf community
+            </p>
+          </div>
+
+          {!user && (
+            <Card className="mb-8 bg-blue-50 border-blue-200">
+              <CardContent className="pt-6">
+                <p className="text-center">
+                  Please <button 
+                    onClick={() => navigate('/auth')}
+                    className="text-blue-600 underline font-semibold"
+                  >
+                    sign in
+                  </button> to purchase tickets and join events
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="flex justify-between mb-6">
+            <div className="flex items-center">
+              <Filter className="size-4 text-gray-500 mr-2" />
+              <select
+                value={activeTab}
+                onChange={(e) => setActiveTab(e.target.value as 'upcoming' | 'past' | 'live' | 'cancelled')}
+                className="border-gray-300 dark:border-gray-700 rounded-md px-3 py-2"
+              >
+                <option value="upcoming">Upcoming Events</option>
+                <option value="live">Live Events</option>
+                <option value="past">Past Events</option>
+                <option value="cancelled">Cancelled Events</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredEvents.length === 0 ? (
+              <div className="col-span-full text-center py-12">
+                <p className="text-gray-500 dark:text-gray-400 text-lg">
+                  {activeTab === 'past' 
+                    ? 'No past events found.'
+                    : activeTab === 'upcoming'
+                    ? 'No upcoming events found.'
+                    : activeTab === 'live'
+                    ? 'No live events at the moment.'
+                    : activeTab === 'cancelled'
+                    ? 'No cancelled events found.'
+                    : 'No events found.'}
+                </p>
+              </div>
+            ) : (
+              filteredEvents.map((event) => (
+                <Card 
+                  key={event.id} 
+                  className="cursor-pointer hover:shadow-lg transition-shadow"
+                  onClick={() => handleEventClick(event)}
+                >
+                  {event.imageUrl && (
+                    <div className="h-48 overflow-hidden rounded-t-lg">
+                      <img 
+                        src={event.imageUrl} 
+                        alt={event.name}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                  )}
+                  <CardHeader>
+                    <div className="flex items-start justify-between gap-2 flex-wrap">
+                      <CardTitle className="text-xl">{event.name}</CardTitle>
+                      <div className="flex flex-wrap gap-2">
+                        {event.status === 'cancelled' && (
+                          <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+                            Cancelled
+                          </Badge>
+                        )}
+                        {isEventPast(event) && event.status !== 'cancelled' && (
+                          <Badge variant="secondary" className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100">
+                            Past Event
+                          </Badge>
+                        )}
+                        {isEventLive(event) && event.status !== 'cancelled' && (
+                          <Badge variant="destructive" className="animate-pulse">
+                            LIVE
+                          </Badge>
+                        )}
+                        {hasTicket(event.id) && (
+                          <Badge variant="default">
+                            Ticket Owned
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <CardDescription className="line-clamp-2">
+                      {event.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex items-center gap-2 text-sm">
+                      <Calendar className="size-4 text-gray-500" />
+                      <span>{format(new Date(event.date), 'PPP')}</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="size-4 text-gray-500" />
+                      <span>{format(new Date(event.date), 'p')} ({event.duration} min)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm">
+                      <Users className="size-4 text-gray-500" />
+                      <span>{event.attendees} / {event.capacity} attendees</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-sm font-semibold">
+                      <DollarSign className="size-4 text-gray-500" />
+                      <span>${event.price}</span>
+                    </div>
+                  </CardContent>
+                  <CardFooter>
+                    <div className="w-full flex flex-col gap-2">
+                      {hasTicket(event.id) ? (
+                        <Button 
+                          className="w-full" 
+                          onClick={(e) => handleJoinEvent(event, e)}
+                          disabled={event.status === 'cancelled' || isEventPast(event) || isEventUpcoming(event)}
+                        >
+                          {isEventLive(event) ? 'Join Now' : 'Show Details'}
+                        </Button>
+                      ) : (
+                        <Button 
+                          className="w-full" 
+                          variant="outline"
+                          disabled={!user}
+                        >
+                          View Details
+                        </Button>
+                      )}
+                      {user?.isAdmin && event.status !== 'cancelled' && (
+                        <Button 
+                          className="w-full" 
+                          variant="destructive"
+                          size="sm"
+                          onClick={(e) => handleCancelEvent(event, e)}
+                          disabled={deletingEventId === event.id}
+                        >
+                          <Trash2 className="size-4 mr-2" />
+                          {deletingEventId === event.id ? 'Cancelling...' : 'Cancel Event'}
+                        </Button>
+                      )}
+                    </div>
+                  </CardFooter>
+                </Card>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
