@@ -1,0 +1,13 @@
+{
+  "deno.enable": false,
+
+  "deno.enablePaths": [
+    "./supabase/functions"
+  ],
+
+  "deno.unstable": true,
+  "deno.lint": true,
+  "deno.format": true,
+  "css.validate": false,
+  "css.lint.unknownAtRules": "ignore"
+}

@@ -1,12 +1,29 @@
-# Node / Vite
-node_modules
-dist
+# =========================
+# Node / Vite / React
+# =========================
+node_modules/
+dist/
+.vite/
+*.log
+
+# env files (ignore ALL env variants)
 .env
-.env.local
+.env.*
+!.env.example
 
-# Supabase
-supabase/.temp
+# =========================
+# Supabase (local dev artifacts)
+# =========================
+supabase/.temp/
 supabase/.env
+supabase/.env.*
+supabase/logs/
+supabase/.branches/
+supabase/.cache/
 
-# OS
+# =========================
+# OS / Editor
+# =========================
 .DS_Store
+.vscode/
+.idea/
