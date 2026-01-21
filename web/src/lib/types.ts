@@ -9,7 +9,7 @@ export interface Event {
   capacity: number;
   attendees: number;
   imageUrl: string;
-  status: 'upcoming' | 'active' | 'ended' | 'cancelled'; // Event status
+  status: "upcoming" | "active" | "ended" | "cancelled"; // Event status
 }
 
 export interface User {

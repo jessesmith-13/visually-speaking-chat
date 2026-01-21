@@ -8,5 +8,8 @@ export interface Event {
   capacity: number;
   attendees: number;
   imageUrl: string;
-  status: 'upcoming' | 'active' | 'ended' | 'cancelled';
+  status: "upcoming" | "active" | "ended" | "cancelled";
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
 }
