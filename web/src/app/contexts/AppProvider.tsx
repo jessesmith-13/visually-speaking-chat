@@ -93,47 +93,31 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
 
     initializeApp();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('🔐 Auth state change:', event);
-      
-      if (!isMounted) return;
-      
-      if (event === 'INITIAL_SESSION' && isInitialized) {
-        console.log('⏭️ Skipping INITIAL_SESSION - already initialized');
-        return;
-      }
-      
-      if (event === 'SIGNED_IN' && session?.user) {
-        console.log('✅ [AUTH] User signed in, fetching profile...');
-        try {
-          const profile = await fetchUserProfile(session.user);
-          
-          if (!isMounted) return;
-          
-          if (profile) {
-            setUser(profile);
-            isInitialized = true;
-          }
-          
-          // Refresh events after login
-          console.log('🔄 [AUTH] Refreshing events after login...');
-          await refreshEvents();
-        } catch (error: unknown) {
-          const err = error as { message?: string; name?: string };
-          if (err.message?.includes('AbortError') || err.message?.includes('aborted') || err.name === 'AbortError') {
-            console.log('⚠️ Profile fetch aborted (component unmounted)');
-            return;
-          }
-          console.error('❌ Error fetching profile on sign in:', error);
-        }
-      } else if (event === 'SIGNED_OUT') {
-        console.log('👋 User signed out');
-        if (isMounted) {
-          setUser(null);
-          isInitialized = false;
-        }
-      }
-    });
+const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+  console.log('🔐 Auth state change:', event);
+  
+  if (!isMounted) return;
+  
+  if (event === 'INITIAL_SESSION' && isInitialized) {
+    console.log('⏭️ Skipping INITIAL_SESSION - already initialized');
+    return;
+  }
+  
+if (event === 'SIGNED_IN' && session?.user) {
+  console.log('✅ [AUTH] User signed in');
+  // Don't fetch profile here - causes timeout during auth callback
+  // Just refresh events and trigger a page reload
+  console.log('🔄 [AUTH] Refreshing events after login...');
+  await refreshEvents();
+  isInitialized = true;
+} else if (event === 'SIGNED_OUT') {
+    console.log('👋 User signed out');
+    if (isMounted) {
+      setUser(null);
+      isInitialized = false;
+    }
+  }
+});
 
     return () => {
       isMounted = false;
