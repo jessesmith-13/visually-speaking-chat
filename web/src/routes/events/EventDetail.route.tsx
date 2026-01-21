@@ -1,17 +1,34 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { format } from 'date-fns';
-import { adminOperations, tickets } from '@/lib/edge/client';
-import { purchaseTicketDemo } from '@/lib/stripe/client';
-import { useApp } from '@/app/hooks';
-import { Button } from '@/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/card';
-import { Input } from '@/ui/input';
-import { Textarea } from '@/ui/textarea';
-import { ArrowLeft, Calendar, Clock, Users, DollarSign, CreditCard, Trash2, Megaphone, Send, Edit } from 'lucide-react';
-import { Badge } from '@/ui/badge';
-import { toast } from 'sonner';
-import { EditEventDialog } from './components/EditEventDialog';
+import { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { format } from "date-fns";
+import { adminOperations, tickets } from "@/lib/edge/client";
+import { purchaseTicketDemo } from "@/lib/stripe/client";
+import { useApp } from "@/app/hooks";
+import { Button } from "@/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/ui/card";
+import { Input } from "@/ui/input";
+import { Textarea } from "@/ui/textarea";
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  Users,
+  DollarSign,
+  CreditCard,
+  Trash2,
+  Megaphone,
+  Send,
+  Edit,
+} from "lucide-react";
+import { Badge } from "@/ui/badge";
+import { toast } from "sonner";
+import { EditEventDialog } from "./components/EditEventDialog";
 
 interface EventUpdate {
   id: string;
@@ -27,16 +44,17 @@ interface EventUpdate {
 export function EventDetailRoute() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
-  const { events, user, refreshUserTickets, refreshEvents, removeEvent } = useApp();
-  const currentEvent = events.find(e => e.id === eventId);
+  const { events, user, refreshUserTickets, refreshEvents, removeEvent } =
+    useApp();
+  const currentEvent = events.find((e) => e.id === eventId);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [hasTicket, setHasTicket] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [eventUpdates, setEventUpdates] = useState<EventUpdate[]>([]);
-  const [updateTitle, setUpdateTitle] = useState('');
-  const [updateMessage, setUpdateMessage] = useState('');
+  const [updateTitle, setUpdateTitle] = useState("");
+  const [updateMessage, setUpdateMessage] = useState("");
   const [isPostingUpdate, setIsPostingUpdate] = useState(false);
-  
+
   // Edit event state
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
@@ -52,7 +70,9 @@ export function EventDetailRoute() {
   const isEventPast = (event: typeof currentEvent) => {
     if (!event) return false;
     const now = new Date();
-    const eventEnd = new Date(new Date(event.date).getTime() + event.duration * 60000);
+    const eventEnd = new Date(
+      new Date(event.date).getTime() + event.duration * 60000,
+    );
     return now > eventEnd;
   };
 
@@ -74,20 +94,24 @@ export function EventDetailRoute() {
       try {
         // Check both local state and database
         const localHasTicket = user.purchasedTickets.includes(currentEvent.id);
-        
+
         // Use Edge Function to get all tickets and check if we have one for this event
         const myTickets = await tickets.getMyTickets();
-        const dbHasTicket = myTickets.some(ticket => ticket.event_id === currentEvent.id);
-        
+        const dbHasTicket = myTickets.some(
+          (ticket) => ticket.event_id === currentEvent.id,
+        );
+
         // If database says we have a ticket but local state doesn't, refresh tickets
         if (dbHasTicket && !localHasTicket) {
-          console.log('🔄 Ticket found in DB but not in local state, refreshing...');
+          console.log(
+            "🔄 Ticket found in DB but not in local state, refreshing...",
+          );
           await refreshUserTickets();
         }
-        
+
         setHasTicket(dbHasTicket);
       } catch (error) {
-        console.error('Error checking ticket status:', error);
+        console.error("Error checking ticket status:", error);
         // Fallback to local state
         setHasTicket(user.purchasedTickets.includes(currentEvent.id));
       }
@@ -100,18 +124,19 @@ export function EventDetailRoute() {
   useEffect(() => {
     const fetchEventUpdates = async () => {
       if (!currentEvent) return;
-      
+
       try {
-        console.log('📢 Fetching event updates via Edge Function...');
-        
+        console.log("📢 Fetching event updates via Edge Function...");
+
         // Use Edge Function instead of direct fetch with service role keys
         const updates = await adminOperations.getEventUpdates(currentEvent.id);
-        
+
         setEventUpdates(updates as EventUpdate[]);
-        console.log('✅ Loaded', updates.length, 'event updates');
+        console.log("✅ Loaded", updates.length, "event updates");
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Error fetching event updates:', errorMessage);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error("Error fetching event updates:", errorMessage);
       }
     };
 
@@ -125,7 +150,7 @@ export function EventDetailRoute() {
         <Card>
           <CardContent className="pt-6">
             <p>Event not found</p>
-            <Button onClick={() => navigate('/events')} className="mt-4">
+            <Button onClick={() => navigate("/events")} className="mt-4">
               Back to Events
             </Button>
           </CardContent>
@@ -136,47 +161,47 @@ export function EventDetailRoute() {
 
   const handlePurchase = async () => {
     if (!user || !currentEvent) return;
-    
+
     // Double-check ticket status before purchase
     if (hasTicket) {
-      toast.error('You already have a ticket for this event');
+      toast.error("You already have a ticket for this event");
       return;
     }
-    
+
     setIsPurchasing(true);
-    
+
     try {
-      console.log('🎫 Starting ticket purchase...');
-      
+      console.log("🎫 Starting ticket purchase...");
+
       // Demo purchase (in production, this would integrate with real Stripe)
       await purchaseTicketDemo(currentEvent.id, currentEvent.price);
-      
-      console.log('✅ Ticket created, refreshing data...');
-      
+
+      console.log("✅ Ticket created, refreshing data...");
+
       // Refresh user tickets and events to get updated attendee count
       await Promise.all([
-        refreshUserTickets().catch(err => {
-          console.error('❌ Error refreshing tickets:', err);
+        refreshUserTickets().catch((err) => {
+          console.error("❌ Error refreshing tickets:", err);
           // Don't throw - allow the process to continue
         }),
-        refreshEvents().catch(err => {
-          console.error('❌ Error refreshing events:', err);
+        refreshEvents().catch((err) => {
+          console.error("❌ Error refreshing events:", err);
           // Don't throw - allow the process to continue
-        })
+        }),
       ]);
-      
-      console.log('✅ Data refreshed successfully');
-      
+
+      console.log("✅ Data refreshed successfully");
+
       // Update local hasTicket state
       setHasTicket(true);
-      
-      toast.success('Ticket purchased successfully!')
-      
+
+      toast.success("Ticket purchased successfully!");
+
       // Check if event has started before allowing redirect
       const eventDate = new Date(currentEvent.date);
       const now = new Date();
       const eventHasStarted = now >= eventDate;
-      
+
       if (eventHasStarted) {
         // Event has started - allow joining immediately
         setTimeout(() => {
@@ -184,17 +209,24 @@ export function EventDetailRoute() {
         }, 500);
       } else {
         // Event hasn't started - just show success message
-        toast.info('Event starts ' + format(eventDate, 'PPpp') + '. You can join from the events page when it begins.');
+        toast.info(
+          "Event starts " +
+            format(eventDate, "PPpp") +
+            ". You can join from the events page when it begins.",
+        );
       }
     } catch (error: unknown) {
       // Ignore AbortError (happens when component unmounts during request)
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log('Request aborted (component unmounted)');
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Request aborted (component unmounted)");
         return;
       }
-      
-      const errorMessage = error instanceof Error ? error.message : 'Failed to purchase ticket. Please try again.';
-      console.error('Purchase error:', error);
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to purchase ticket. Please try again.";
+      console.error("Purchase error:", error);
       toast.error(errorMessage);
     } finally {
       setIsPurchasing(false);
@@ -207,40 +239,43 @@ export function EventDetailRoute() {
 
   const handleDeleteEvent = async () => {
     if (!currentEvent) return;
-    
+
     setIsCancelling(true);
-    
+
     try {
-      console.log('🗑️ Starting event deletion...');
-      
+      console.log("🗑️ Starting event deletion...");
+
       // Demo deletion (in production, this would integrate with real backend)
       await removeEvent(currentEvent.id);
-      
-      console.log('✅ Event deleted, refreshing data...');
-      
+
+      console.log("✅ Event deleted, refreshing data...");
+
       // Refresh events to get updated list
-      await refreshEvents().catch(err => {
-        console.error('❌ Error refreshing events:', err);
+      await refreshEvents().catch((err) => {
+        console.error("❌ Error refreshing events:", err);
         // Don't throw - allow the process to continue
       });
-      
-      console.log('✅ Data refreshed successfully');
-      
-      toast.success('Event deleted successfully!');
-      
+
+      console.log("✅ Data refreshed successfully");
+
+      toast.success("Event deleted successfully!");
+
       // Use a shorter delay and navigate immediately
       setTimeout(() => {
-        navigate('/events');
+        navigate("/events");
       }, 500);
     } catch (error: unknown) {
       // Ignore AbortError (happens when component unmounts during request)
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log('Request aborted (component unmounted)');
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Request aborted (component unmounted)");
         return;
       }
-      
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete event. Please try again.';
-      console.error('Deletion error:', error);
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to delete event. Please try again.";
+      console.error("Deletion error:", error);
       toast.error(errorMessage);
     } finally {
       setIsCancelling(false);
@@ -251,43 +286,44 @@ export function EventDetailRoute() {
 
   const handlePostUpdate = async () => {
     if (!user?.isAdmin || !currentEvent) return;
-    
+
     if (!updateTitle.trim()) {
-      toast.error('Please enter an update title');
+      toast.error("Please enter an update title");
       return;
     }
-    
+
     if (!updateMessage.trim()) {
-      toast.error('Please enter an update message');
+      toast.error("Please enter an update message");
       return;
     }
-    
+
     setIsPostingUpdate(true);
-    
+
     try {
-      console.log('📢 Posting event update via Edge Function...');
-      
+      console.log("📢 Posting event update via Edge Function...");
+
       // Use Edge Function instead of direct fetch with service role keys
       await adminOperations.postEventUpdate(
         currentEvent.id,
         updateTitle.trim(),
-        updateMessage.trim()
+        updateMessage.trim(),
       );
-      
-      console.log('✅ Update posted successfully');
-      
+
+      console.log("✅ Update posted successfully");
+
       // Refresh updates list
       const updates = await adminOperations.getEventUpdates(currentEvent.id);
       setEventUpdates(updates as EventUpdate[]);
-      
-      toast.success('Update posted successfully!');
-      
+
+      toast.success("Update posted successfully!");
+
       // Clear form
-      setUpdateTitle('');
-      setUpdateMessage('');
+      setUpdateTitle("");
+      setUpdateMessage("");
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to post update';
-      console.error('Error posting update:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to post update";
+      console.error("Error posting update:", error);
       toast.error(errorMessage);
     } finally {
       setIsPostingUpdate(false);
@@ -297,9 +333,9 @@ export function EventDetailRoute() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container mx-auto px-4 py-8">
-        <Button 
-          variant="ghost" 
-          onClick={() => navigate('/events')}
+        <Button
+          variant="ghost"
+          onClick={() => navigate("/events")}
           className="mb-6"
         >
           <ArrowLeft className="size-4 mr-2" />
@@ -311,8 +347,8 @@ export function EventDetailRoute() {
           <div className="lg:col-span-2 space-y-6">
             {currentEvent.imageUrl && (
               <div className="h-96 overflow-hidden rounded-lg">
-                <img 
-                  src={currentEvent.imageUrl} 
+                <img
+                  src={currentEvent.imageUrl}
                   alt={currentEvent.name}
                   className="w-full h-full object-cover"
                 />
@@ -331,21 +367,32 @@ export function EventDetailRoute() {
                     </CardDescription>
                   </div>
                   <div className="flex flex-col gap-2 items-end">
-                    {currentEvent.status === 'cancelled' && (
-                      <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 text-sm px-3 py-1">
+                    {currentEvent.status === "cancelled" && (
+                      <Badge
+                        variant="secondary"
+                        className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100 text-sm px-3 py-1"
+                      >
                         Event Cancelled
                       </Badge>
                     )}
-                    {isEventPast(currentEvent) && currentEvent.status !== 'cancelled' && (
-                      <Badge variant="secondary" className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100 text-sm px-3 py-1">
-                        Past Event
-                      </Badge>
-                    )}
-                    {isEventLive(currentEvent) && currentEvent.status !== 'cancelled' && (
-                      <Badge variant="destructive" className="animate-pulse text-sm px-3 py-1">
-                        LIVE NOW
-                      </Badge>
-                    )}
+                    {isEventPast(currentEvent) &&
+                      currentEvent.status !== "cancelled" && (
+                        <Badge
+                          variant="secondary"
+                          className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100 text-sm px-3 py-1"
+                        >
+                          Past Event
+                        </Badge>
+                      )}
+                    {isEventLive(currentEvent) &&
+                      currentEvent.status !== "cancelled" && (
+                        <Badge
+                          variant="destructive"
+                          className="animate-pulse text-sm px-3 py-1"
+                        >
+                          LIVE NOW
+                        </Badge>
+                      )}
                     {hasTicket && (
                       <Badge variant="default" className="text-sm px-3 py-1">
                         Ticket Owned
@@ -360,18 +407,20 @@ export function EventDetailRoute() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <Calendar className="size-5 text-gray-500" />
-                      <span>{format(new Date(currentEvent.date), 'PPPP')}</span>
+                      <span>{format(new Date(currentEvent.date), "PPPP")}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="size-5 text-gray-500" />
                       <span>
-                        {format(new Date(currentEvent.date), 'p')} - Duration: {currentEvent.duration} minutes
+                        {format(new Date(currentEvent.date), "p")} - Duration:{" "}
+                        {currentEvent.duration} minutes
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Users className="size-5 text-gray-500" />
                       <span>
-                        {currentEvent.attendees} / {currentEvent.capacity} attendees
+                        {currentEvent.attendees} / {currentEvent.capacity}{" "}
+                        attendees
                       </span>
                     </div>
                   </div>
@@ -384,7 +433,9 @@ export function EventDetailRoute() {
                     <li>Random pairing with other attendees</li>
                     <li>Ability to "next" and meet new people</li>
                     <li>Safe, moderated environment</li>
-                    <li>Chat duration: {currentEvent.duration} minutes total</li>
+                    <li>
+                      Chat duration: {currentEvent.duration} minutes total
+                    </li>
                   </ul>
                 </div>
 
@@ -406,13 +457,12 @@ export function EventDetailRoute() {
             <Card className="sticky top-4">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="size-5" />
-                  ${currentEvent.price}
+                  <DollarSign className="size-5" />${currentEvent.price}
                 </CardTitle>
                 <CardDescription>
                   {spotsLeft > 0 ? (
                     <span className="text-green-600">
-                      {spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left
+                      {spotsLeft} spot{spotsLeft !== 1 ? "s" : ""} left
                     </span>
                   ) : (
                     <span className="text-red-600">Event Full</span>
@@ -425,16 +475,16 @@ export function EventDetailRoute() {
                     <p className="text-sm text-gray-600">
                       Please sign in to purchase a ticket
                     </p>
-                    <Button 
-                      className="w-full" 
-                      onClick={() => navigate('/auth')}
+                    <Button
+                      className="w-full"
+                      onClick={() => navigate("/auth")}
                     >
                       Sign In
                     </Button>
                   </>
                 ) : hasTicket ? (
                   <>
-                    {currentEvent.status === 'cancelled' ? (
+                    {currentEvent.status === "cancelled" ? (
                       <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                         <p className="text-sm text-red-800 font-medium">
                           ⚠️ This event has been cancelled
@@ -453,7 +503,8 @@ export function EventDetailRoute() {
                             ✓ You have a ticket for this event
                           </p>
                           <p className="text-xs text-green-700">
-                            Event starts at {format(new Date(currentEvent.date), 'p')}
+                            Event starts at{" "}
+                            {format(new Date(currentEvent.date), "p")}
                           </p>
                         </div>
                         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -469,33 +520,45 @@ export function EventDetailRoute() {
                             ✓ You have a ticket for this event
                           </p>
                         </div>
-                        <Button 
-                          className="w-full" 
+                        <Button
+                          className="w-full"
                           onClick={handleJoinEvent}
                           disabled={isEventPast(currentEvent)}
                         >
-                          {isEventLive(currentEvent) ? 'Join Now' : 'Join Event'}
+                          {isEventLive(currentEvent)
+                            ? "Join Now"
+                            : "Join Event"}
                         </Button>
                       </>
                     )}
                     {user?.isAdmin && (
-                      <Button 
-                        className="w-full mt-2" 
+                      <Button
+                        className="w-full mt-2"
                         variant="destructive"
                         onClick={() => {
-                          if (window.confirm(`Are you sure you want to cancel "${currentEvent.name}"? This will mark the event as cancelled.`)) {
+                          if (
+                            window.confirm(
+                              `Are you sure you want to cancel "${currentEvent.name}"? This will mark the event as cancelled.`,
+                            )
+                          ) {
                             handleDeleteEvent();
                           }
                         }}
-                        disabled={isCancelling || currentEvent.status === 'cancelled'}
+                        disabled={
+                          isCancelling || currentEvent.status === "cancelled"
+                        }
                       >
                         <Trash2 className="size-4 mr-2" />
-                        {isCancelling ? 'Cancelling Event...' : currentEvent.status === 'cancelled' ? 'Event Cancelled' : 'Cancel Event (Admin)'}
+                        {isCancelling
+                          ? "Cancelling Event..."
+                          : currentEvent.status === "cancelled"
+                            ? "Event Cancelled"
+                            : "Cancel Event (Admin)"}
                       </Button>
                     )}
                     {user?.isAdmin && (
-                      <Button 
-                        className="w-full mt-2" 
+                      <Button
+                        className="w-full mt-2"
                         variant="outline"
                         onClick={() => setIsEditDialogOpen(true)}
                       >
@@ -506,7 +569,7 @@ export function EventDetailRoute() {
                   </>
                 ) : (
                   <>
-                    {currentEvent.status === 'cancelled' ? (
+                    {currentEvent.status === "cancelled" ? (
                       <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                         <p className="text-sm text-red-800 font-medium text-center">
                           ⚠️ This event has been cancelled
@@ -523,7 +586,9 @@ export function EventDetailRoute() {
                         <div className="space-y-2">
                           <div className="flex justify-between text-sm">
                             <span>Ticket Price</span>
-                            <span className="font-semibold">${currentEvent.price}</span>
+                            <span className="font-semibold">
+                              ${currentEvent.price}
+                            </span>
                           </div>
                           <div className="flex justify-between text-sm">
                             <span>Service Fee</span>
@@ -534,13 +599,17 @@ export function EventDetailRoute() {
                             <span>${currentEvent.price}</span>
                           </div>
                         </div>
-                        <Button 
-                          className="w-full" 
+                        <Button
+                          className="w-full"
                           onClick={handlePurchase}
-                          disabled={spotsLeft === 0 || isPurchasing || isEventPast(currentEvent)}
+                          disabled={
+                            spotsLeft === 0 ||
+                            isPurchasing ||
+                            isEventPast(currentEvent)
+                          }
                         >
                           <CreditCard className="size-4 mr-2" />
-                          {isPurchasing ? 'Purchasing...' : 'Purchase Ticket'}
+                          {isPurchasing ? "Purchasing..." : "Purchase Ticket"}
                         </Button>
                         <p className="text-xs text-gray-500 text-center">
                           Secure payment powered by Stripe
@@ -562,18 +631,19 @@ export function EventDetailRoute() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {eventUpdates.map(update => (
-                    <div key={update.id} className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg">
+                  {eventUpdates.map((update) => (
+                    <div
+                      key={update.id}
+                      className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg"
+                    >
                       <div className="flex items-start justify-between mb-2">
-                        <p className="text-sm font-medium">
-                          {update.title}
-                        </p>
+                        <p className="text-sm font-medium">{update.title}</p>
                         <Badge variant="secondary" className="text-xs">
-                          {update.creator_name || 'Admin'}
+                          {update.creator_name || "Admin"}
                         </Badge>
                       </div>
                       <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
-                        {format(new Date(update.created_at), 'PPP p')}
+                        {format(new Date(update.created_at), "PPP p")}
                       </p>
                       <p className="text-sm text-gray-700 dark:text-gray-300">
                         {update.message}
@@ -601,9 +671,9 @@ export function EventDetailRoute() {
                     <label className="block text-sm font-medium mb-2">
                       Update Title
                     </label>
-                    <Input 
-                      placeholder="e.g., Venue Change, Schedule Update" 
-                      value={updateTitle} 
+                    <Input
+                      placeholder="e.g., Venue Change, Schedule Update"
+                      value={updateTitle}
                       onChange={(e) => setUpdateTitle(e.target.value)}
                     />
                   </div>
@@ -611,23 +681,28 @@ export function EventDetailRoute() {
                     <label className="block text-sm font-medium mb-2">
                       Message
                     </label>
-                    <Textarea 
-                      placeholder="Your update message..." 
-                      value={updateMessage} 
+                    <Textarea
+                      placeholder="Your update message..."
+                      value={updateMessage}
                       onChange={(e) => setUpdateMessage(e.target.value)}
                       rows={5}
                     />
                   </div>
-                  <Button 
-                    className="w-full" 
+                  <Button
+                    className="w-full"
                     onClick={handlePostUpdate}
-                    disabled={isPostingUpdate || !updateTitle.trim() || !updateMessage.trim()}
+                    disabled={
+                      isPostingUpdate ||
+                      !updateTitle.trim() ||
+                      !updateMessage.trim()
+                    }
                   >
                     <Send className="size-4 mr-2" />
-                    {isPostingUpdate ? 'Posting...' : 'Post Update'}
+                    {isPostingUpdate ? "Posting..." : "Post Update"}
                   </Button>
                   <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                    This will notify all {currentEvent.attendees} ticket holder{currentEvent.attendees !== 1 ? 's' : ''}
+                    This will notify all {currentEvent.attendees} ticket holder
+                    {currentEvent.attendees !== 1 ? "s" : ""}
                   </p>
                 </CardContent>
               </Card>
@@ -635,7 +710,7 @@ export function EventDetailRoute() {
           </div>
         </div>
       </div>
-      
+
       {/* Edit Event Dialog */}
       <EditEventDialog
         event={{

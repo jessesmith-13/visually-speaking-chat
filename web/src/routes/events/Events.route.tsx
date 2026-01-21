@@ -1,22 +1,42 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/ui/card';
-import { Button } from '@/ui/button';
-import { Badge } from '@/ui/badge';
-import { Calendar, Clock, Users, DollarSign, Trash2, Filter } from 'lucide-react';
-import { useApp } from '@/app/hooks';
-import { Event } from '@/features/events/types';
-import { format } from 'date-fns';
-import { toast } from 'sonner';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/ui/card";
+import { Button } from "@/ui/button";
+import { Badge } from "@/ui/badge";
+import {
+  Calendar,
+  Clock,
+  Users,
+  DollarSign,
+  Trash2,
+  Filter,
+  Edit,
+} from "lucide-react";
+import { useApp } from "@/app/hooks";
+import { Event } from "@/features/events/types";
+import { format } from "date-fns";
+import { toast } from "sonner";
+import { EditEventDialog } from "./components/EditEventDialog";
 
 export function EventsRoute() {
   const navigate = useNavigate();
-  const { events, user, setCurrentEvent, removeEvent } = useApp();
+  const { events, user, setCurrentEvent, removeEvent, refreshEvents } =
+    useApp();
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'past' | 'live' | 'cancelled'>('upcoming');
+  const [activeTab, setActiveTab] = useState<
+    "upcoming" | "past" | "live" | "cancelled"
+  >("upcoming");
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
 
-  console.log('📋 [EVENTS ROUTE] Rendering with events:', events.length);
-  console.log('📋 [EVENTS ROUTE] Events:', events);
+  console.log("📋 [EVENTS ROUTE] Rendering with events:", events.length);
+  console.log("📋 [EVENTS ROUTE] Events:", events);
 
   const handleEventClick = (event: Event) => {
     setCurrentEvent(event);
@@ -31,23 +51,33 @@ export function EventsRoute() {
 
   const handleCancelEvent = async (event: Event, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    if (!window.confirm(`Are you sure you want to cancel "${event.name}"? This will delete the event and all associated tickets.`)) {
+
+    if (
+      !window.confirm(
+        `Are you sure you want to cancel "${event.name}"? This will delete the event and all associated tickets.`,
+      )
+    ) {
       return;
     }
-    
+
     setDeletingEventId(event.id);
-    
+
     try {
       await removeEvent(event.id);
-      toast.success('Event cancelled successfully');
+      toast.success("Event cancelled successfully");
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to cancel event';
-      console.error('Error cancelling event:', error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to cancel event";
+      console.error("Error cancelling event:", error);
       toast.error(errorMessage);
     } finally {
       setDeletingEventId(null);
     }
+  };
+
+  const handleEditEvent = (event: Event, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingEvent(event);
   };
 
   const hasTicket = (eventId: string) => {
@@ -64,7 +94,9 @@ export function EventsRoute() {
 
   const isEventPast = (event: Event) => {
     const now = new Date();
-    const eventEnd = new Date(new Date(event.date).getTime() + event.duration * 60000);
+    const eventEnd = new Date(
+      new Date(event.date).getTime() + event.duration * 60000,
+    );
     return now > eventEnd;
   };
 
@@ -76,13 +108,15 @@ export function EventsRoute() {
 
   const filteredEvents = events.filter((event) => {
     // "Live" shows only currently active events
-    if (activeTab === 'live') return isEventLive(event) && event.status !== 'cancelled';
+    if (activeTab === "live")
+      return isEventLive(event) && event.status !== "cancelled";
     // "Upcoming" includes both future events AND currently live events
-    if (activeTab === 'upcoming') return !isEventPast(event) && event.status !== 'cancelled';
+    if (activeTab === "upcoming")
+      return !isEventPast(event) && event.status !== "cancelled";
     // "Past" only includes events that have completely ended
-    if (activeTab === 'past') return isEventPast(event);
+    if (activeTab === "past") return isEventPast(event);
     // "Cancelled" only includes events that have been cancelled
-    if (activeTab === 'cancelled') return event.status === 'cancelled';
+    if (activeTab === "cancelled") return event.status === "cancelled";
     return false;
   });
 
@@ -103,12 +137,14 @@ export function EventsRoute() {
             <Card className="mb-8 bg-blue-50 border-blue-200">
               <CardContent className="pt-6">
                 <p className="text-center">
-                  Please <button 
-                    onClick={() => navigate('/auth')}
+                  Please{" "}
+                  <button
+                    onClick={() => navigate("/auth")}
                     className="text-blue-600 underline font-semibold"
                   >
                     sign in
-                  </button> to purchase tickets and join events
+                  </button>{" "}
+                  to purchase tickets and join events
                 </p>
               </CardContent>
             </Card>
@@ -119,7 +155,15 @@ export function EventsRoute() {
               <Filter className="size-4 text-gray-500 mr-2" />
               <select
                 value={activeTab}
-                onChange={(e) => setActiveTab(e.target.value as 'upcoming' | 'past' | 'live' | 'cancelled')}
+                onChange={(e) =>
+                  setActiveTab(
+                    e.target.value as
+                      | "upcoming"
+                      | "past"
+                      | "live"
+                      | "cancelled",
+                  )
+                }
                 className="border-gray-300 dark:border-gray-700 rounded-md px-3 py-2"
               >
                 <option value="upcoming">Upcoming Events</option>
@@ -134,28 +178,28 @@ export function EventsRoute() {
             {filteredEvents.length === 0 ? (
               <div className="col-span-full text-center py-12">
                 <p className="text-gray-500 dark:text-gray-400 text-lg">
-                  {activeTab === 'past' 
-                    ? 'No past events found.'
-                    : activeTab === 'upcoming'
-                    ? 'No upcoming events found.'
-                    : activeTab === 'live'
-                    ? 'No live events at the moment.'
-                    : activeTab === 'cancelled'
-                    ? 'No cancelled events found.'
-                    : 'No events found.'}
+                  {activeTab === "past"
+                    ? "No past events found."
+                    : activeTab === "upcoming"
+                      ? "No upcoming events found."
+                      : activeTab === "live"
+                        ? "No live events at the moment."
+                        : activeTab === "cancelled"
+                          ? "No cancelled events found."
+                          : "No events found."}
                 </p>
               </div>
             ) : (
               filteredEvents.map((event) => (
-                <Card 
-                  key={event.id} 
+                <Card
+                  key={event.id}
                   className="cursor-pointer hover:shadow-lg transition-shadow"
                   onClick={() => handleEventClick(event)}
                 >
                   {event.imageUrl && (
                     <div className="h-48 overflow-hidden rounded-t-lg">
-                      <img 
-                        src={event.imageUrl} 
+                      <img
+                        src={event.imageUrl}
                         alt={event.name}
                         className="w-full h-full object-cover"
                       />
@@ -165,25 +209,32 @@ export function EventsRoute() {
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <CardTitle className="text-xl">{event.name}</CardTitle>
                       <div className="flex flex-wrap gap-2">
-                        {event.status === 'cancelled' && (
-                          <Badge variant="secondary" className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100">
+                        {event.status === "cancelled" && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+                          >
                             Cancelled
                           </Badge>
                         )}
-                        {isEventPast(event) && event.status !== 'cancelled' && (
-                          <Badge variant="secondary" className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100">
+                        {isEventPast(event) && event.status !== "cancelled" && (
+                          <Badge
+                            variant="secondary"
+                            className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100"
+                          >
                             Past Event
                           </Badge>
                         )}
-                        {isEventLive(event) && event.status !== 'cancelled' && (
-                          <Badge variant="destructive" className="animate-pulse">
+                        {isEventLive(event) && event.status !== "cancelled" && (
+                          <Badge
+                            variant="destructive"
+                            className="animate-pulse"
+                          >
                             LIVE
                           </Badge>
                         )}
                         {hasTicket(event.id) && (
-                          <Badge variant="default">
-                            Ticket Owned
-                          </Badge>
+                          <Badge variant="default">Ticket Owned</Badge>
                         )}
                       </div>
                     </div>
@@ -194,15 +245,20 @@ export function EventsRoute() {
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-2 text-sm">
                       <Calendar className="size-4 text-gray-500" />
-                      <span>{format(new Date(event.date), 'PPP')}</span>
+                      <span>{format(new Date(event.date), "PPP")}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Clock className="size-4 text-gray-500" />
-                      <span>{format(new Date(event.date), 'p')} ({event.duration} min)</span>
+                      <span>
+                        {format(new Date(event.date), "p")} ({event.duration}{" "}
+                        min)
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 text-sm">
                       <Users className="size-4 text-gray-500" />
-                      <span>{event.attendees} / {event.capacity} attendees</span>
+                      <span>
+                        {event.attendees} / {event.capacity} attendees
+                      </span>
                     </div>
                     <div className="flex items-center gap-2 text-sm font-semibold">
                       <DollarSign className="size-4 text-gray-500" />
@@ -212,33 +268,52 @@ export function EventsRoute() {
                   <CardFooter>
                     <div className="w-full flex flex-col gap-2">
                       {hasTicket(event.id) ? (
-                        <Button 
-                          className="w-full" 
+                        <Button
+                          className="w-full"
                           onClick={(e) => handleJoinEvent(event, e)}
-                          disabled={event.status === 'cancelled' || isEventPast(event) || isEventUpcoming(event)}
+                          disabled={
+                            event.status === "cancelled" ||
+                            isEventPast(event) ||
+                            isEventUpcoming(event)
+                          }
                         >
-                          {isEventLive(event) ? 'Join Now' : 'Show Details'}
+                          {isEventLive(event) ? "Join Now" : "Show Details"}
                         </Button>
                       ) : (
-                        <Button 
-                          className="w-full" 
+                        <Button
+                          className="w-full"
                           variant="outline"
                           disabled={!user}
                         >
                           View Details
                         </Button>
                       )}
-                      {user?.isAdmin && event.status !== 'cancelled' && (
-                        <Button 
-                          className="w-full" 
-                          variant="destructive"
-                          size="sm"
-                          onClick={(e) => handleCancelEvent(event, e)}
-                          disabled={deletingEventId === event.id}
-                        >
-                          <Trash2 className="size-4 mr-2" />
-                          {deletingEventId === event.id ? 'Cancelling...' : 'Cancel Event'}
-                        </Button>
+                      {user?.isAdmin && (
+                        <div className="flex gap-2">
+                          <Button
+                            className="flex-1"
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => handleEditEvent(event, e)}
+                          >
+                            <Edit className="size-4 mr-2" />
+                            Edit
+                          </Button>
+                          {event.status !== "cancelled" && (
+                            <Button
+                              className="flex-1"
+                              variant="destructive"
+                              size="sm"
+                              onClick={(e) => handleCancelEvent(event, e)}
+                              disabled={deletingEventId === event.id}
+                            >
+                              <Trash2 className="size-4 mr-2" />
+                              {deletingEventId === event.id
+                                ? "Cancelling..."
+                                : "Cancel"}
+                            </Button>
+                          )}
+                        </div>
                       )}
                     </div>
                   </CardFooter>
@@ -248,6 +323,22 @@ export function EventsRoute() {
           </div>
         </div>
       </div>
+
+      {/* Edit Event Dialog */}
+      {editingEvent && (
+        <EditEventDialog
+          event={editingEvent}
+          open={!!editingEvent}
+          onOpenChange={(open) => {
+            if (!open) setEditingEvent(null);
+          }}
+          onEventUpdated={() => {
+            refreshEvents();
+            setEditingEvent(null);
+            toast.success("Event updated successfully!");
+          }}
+        />
+      )}
     </div>
   );
 }
