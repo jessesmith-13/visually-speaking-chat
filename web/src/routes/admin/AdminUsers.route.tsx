@@ -1,112 +1,105 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { User, Search, ArrowLeft, Mail, Calendar } from 'lucide-react';
-import { toast } from 'sonner';
-import { adminOperations } from '@/lib/edge/client';
-import { Button } from '@/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/ui/card';
-import { Input } from '@/ui/input';
-import { Badge } from '@/ui/badge';
-
-interface UserProfile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  is_admin: boolean;
-  created_at: string;
-}
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { User, Search, ArrowLeft, Mail, Calendar } from "lucide-react";
+import { toast } from "sonner";
+import { fetchAllUsers, toggleAdminStatus } from "@/features/admin/api";
+import { UserProfile } from "@/features/admin/types";
+import { Button } from "@/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Input } from "@/ui/input";
+import { Badge } from "@/ui/badge";
 
 export function AdminUsersRoute() {
   const navigate = useNavigate();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const loadingRef = useRef(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     let isMounted = true;
-    
-    const fetchUsers = async () => {
-      if (loadingRef.current) {
-        console.log('⚠️ Fetch already in progress, skipping...');
-        return;
-      }
 
-      loadingRef.current = true;
+    const loadUsers = async () => {
       setLoading(true);
 
       try {
-        console.log('🔄 [ADMIN USERS] Calling adminOperations.getAllUsers()...');
-        
-        const data = await adminOperations.getAllUsers();
-        
+        console.log("🔄 [ADMIN USERS] Calling fetchAllUsers()...");
+
+        const data = await fetchAllUsers();
+
         if (!isMounted) return;
 
-        console.log(`✅ [ADMIN USERS] Successfully fetched ${data?.length || 0} users`);
-        
+        console.log(
+          `✅ [ADMIN USERS] Successfully fetched ${data?.length || 0} users`,
+        );
+
         setUsers(data || []);
-        setLoading(false);
       } catch (error: unknown) {
         if (!isMounted) return;
-        
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('❌ [ADMIN USERS] Error in fetchUsers:', error);
-        
+
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error("❌ [ADMIN USERS] Error fetching users:", error);
+
         toast.error(`Failed to load users: ${errorMessage}`);
         setUsers([]);
-        setLoading(false);
       } finally {
-        loadingRef.current = false;
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
-    
-    fetchUsers();
-    
+
+    loadUsers();
+
     return () => {
       isMounted = false;
     };
   }, []);
 
-  const toggleAdmin = async (userId: string, currentStatus: boolean) => {
+  const handleToggleAdmin = async (userId: string, currentStatus: boolean) => {
     try {
-      console.log('🔄 [ADMIN USERS] Toggle admin clicked:', { userId, currentStatus, targetStatus: !currentStatus });
-      
-      toast.loading('Updating admin status...');
-      
+      console.log("🔄 [ADMIN USERS] Toggling admin status:", {
+        userId,
+        currentStatus,
+        targetStatus: !currentStatus,
+      });
+
+      const loadingToast = toast.loading("Updating admin status...");
+
       // Optimistically update UI
-      setUsers(prevUsers => 
-        prevUsers.map(u => 
-          u.id === userId ? { ...u, is_admin: !currentStatus } : u
-        )
+      setUsers((prevUsers) =>
+        prevUsers.map((u) =>
+          u.id === userId ? { ...u, is_admin: !currentStatus } : u,
+        ),
       );
 
-      console.log('🔄 [ADMIN USERS] Calling adminOperations.updateAdminStatus()...');
-      
-      await adminOperations.updateAdminStatus(userId, !currentStatus);
+      console.log("🔄 [ADMIN USERS] Calling toggleAdminStatus()...");
 
-      toast.dismiss();
-      console.log('✅ [ADMIN USERS] Admin status updated successfully');
-      toast.success('Admin status updated!');
+      await toggleAdminStatus(userId, !currentStatus);
+
+      toast.dismiss(loadingToast);
+      console.log("✅ [ADMIN USERS] Admin status updated successfully");
+      toast.success("Admin status updated!");
     } catch (error: unknown) {
-      toast.dismiss();
-      
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('❌ [ADMIN USERS] Exception in toggleAdmin:', error);
-      
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("❌ [ADMIN USERS] Error toggling admin:", error);
+
       // Revert optimistic update
-      setUsers(prevUsers => 
-        prevUsers.map(u => 
-          u.id === userId ? { ...u, is_admin: currentStatus } : u
-        )
+      setUsers((prevUsers) =>
+        prevUsers.map((u) =>
+          u.id === userId ? { ...u, is_admin: currentStatus } : u,
+        ),
       );
-      
+
       toast.error(`Failed to update admin status: ${errorMessage}`);
     }
   };
 
-  const filteredUsers = users.filter(u => 
-    u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    u.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredUsers = users.filter(
+    (u) =>
+      u.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      u.full_name?.toLowerCase().includes(searchQuery.toLowerCase()),
   );
 
   return (
@@ -116,7 +109,7 @@ export function AdminUsersRoute() {
         <div className="mb-8">
           <Button
             variant="ghost"
-            onClick={() => navigate('/events')}
+            onClick={() => navigate("/events")}
             className="mb-4"
           >
             <ArrowLeft className="size-4 mr-2" />
@@ -124,7 +117,9 @@ export function AdminUsersRoute() {
           </Button>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white">User Management</h1>
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+                User Management
+              </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-2">
                 View and manage all registered users
               </p>
@@ -155,13 +150,17 @@ export function AdminUsersRoute() {
         {loading ? (
           <Card>
             <CardContent className="pt-6 text-center">
-              <p className="text-gray-500 dark:text-gray-400">Loading users...</p>
+              <p className="text-gray-500 dark:text-gray-400">
+                Loading users...
+              </p>
             </CardContent>
           </Card>
         ) : filteredUsers.length === 0 ? (
           <Card>
             <CardContent className="pt-6 text-center">
-              <p className="text-gray-500 dark:text-gray-400">No users found</p>
+              <p className="text-gray-500 dark:text-gray-400">
+                {searchQuery ? "No users match your search" : "No users found"}
+              </p>
             </CardContent>
           </Card>
         ) : (
@@ -178,7 +177,7 @@ export function AdminUsersRoute() {
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="font-semibold text-lg">
-                              {userProfile.full_name || 'No Name'}
+                              {userProfile.full_name || "No Name"}
                             </h3>
                             {userProfile.is_admin && (
                               <Badge variant="default">Admin</Badge>
@@ -190,12 +189,15 @@ export function AdminUsersRoute() {
                           </div>
                         </div>
                       </div>
-                      
+
                       <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 pl-15">
                         <div className="flex items-center gap-1">
                           <Calendar className="size-4" />
                           <span>
-                            Joined {new Date(userProfile.created_at).toLocaleDateString()}
+                            Joined{" "}
+                            {new Date(
+                              userProfile.created_at,
+                            ).toLocaleDateString()}
                           </span>
                         </div>
                         <div className="flex items-center gap-1">
@@ -208,11 +210,18 @@ export function AdminUsersRoute() {
 
                     <div className="flex flex-col gap-2">
                       <Button
-                        variant={userProfile.is_admin ? 'destructive' : 'default'}
+                        variant={
+                          userProfile.is_admin ? "destructive" : "default"
+                        }
                         size="sm"
-                        onClick={() => toggleAdmin(userProfile.id, userProfile.is_admin)}
+                        onClick={() =>
+                          handleToggleAdmin(
+                            userProfile.id,
+                            userProfile.is_admin,
+                          )
+                        }
                       >
-                        {userProfile.is_admin ? 'Remove Admin' : 'Make Admin'}
+                        {userProfile.is_admin ? "Remove Admin" : "Make Admin"}
                       </Button>
                     </div>
                   </div>
@@ -229,15 +238,16 @@ export function AdminUsersRoute() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Export user emails and data for marketing or administrative purposes.
+              Export user emails and data for marketing or administrative
+              purposes.
             </p>
             <div className="flex gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
-                  const emails = users.map(u => u.email).join(', ');
+                  const emails = users.map((u) => u.email).join(", ");
                   navigator.clipboard.writeText(emails);
-                  toast.success('All emails copied to clipboard!');
+                  toast.success("All emails copied to clipboard!");
                 }}
               >
                 Copy All Emails
@@ -246,22 +256,24 @@ export function AdminUsersRoute() {
                 variant="outline"
                 onClick={() => {
                   const csv = [
-                    ['Email', 'Name', 'Admin', 'Created At'].join(','),
-                    ...users.map(u => [
-                      u.email,
-                      u.full_name || '',
-                      u.is_admin ? 'Yes' : 'No',
-                      new Date(u.created_at).toLocaleDateString()
-                    ].join(','))
-                  ].join('\n');
-                  
-                  const blob = new Blob([csv], { type: 'text/csv' });
+                    ["Email", "Name", "Admin", "Created At"].join(","),
+                    ...users.map((u) =>
+                      [
+                        u.email,
+                        u.full_name || "",
+                        u.is_admin ? "Yes" : "No",
+                        new Date(u.created_at).toLocaleDateString(),
+                      ].join(","),
+                    ),
+                  ].join("\n");
+
+                  const blob = new Blob([csv], { type: "text/csv" });
                   const url = window.URL.createObjectURL(blob);
-                  const a = document.createElement('a');
+                  const a = document.createElement("a");
                   a.href = url;
-                  a.download = 'visuallyspeaking-users.csv';
+                  a.download = "visuallyspeaking-users.csv";
                   a.click();
-                  toast.success('User data exported!');
+                  toast.success("User data exported!");
                 }}
               >
                 Export as CSV
