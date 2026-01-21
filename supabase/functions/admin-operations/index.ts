@@ -190,7 +190,7 @@ Deno.serve(async (req) => {
               description: eventData.description,
               date: eventData.date,
               duration: durationCheck.value!,
-              ticket_price: priceCheck.value!,
+              price: priceCheck.value!,
               capacity: capacityCheck.value!,
               attendees: 0,
               image_url: eventData.imageUrl,
@@ -198,7 +198,7 @@ Deno.serve(async (req) => {
               created_by: userId,
             })
             .select(
-              "id, name, description, date, duration, ticket_price, capacity, attendees, image_url, status, created_by, created_at",
+              "id, name, description, date, duration, price, capacity, attendees, image_url, status, created_by, created_at",
             )
             .single();
 
@@ -277,7 +277,7 @@ Deno.serve(async (req) => {
                 corsHeaders,
               );
             }
-            updatePayload.ticket_price = priceCheck.value;
+            updatePayload.price = priceCheck.value;
           }
 
           // Validate and include duration if present
@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
             .update(updatePayload)
             .eq("id", eventId)
             .select(
-              "id, name, description, date, duration, ticket_price, capacity, attendees, image_url, status, created_by, updated_at",
+              "id, name, description, date, duration, price, capacity, attendees, image_url, status, created_by, updated_at",
             )
             .single();
 
