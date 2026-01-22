@@ -1,31 +1,33 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/ui/button';
-import { Input } from '@/ui/input';
-import { Label } from '@/ui/label';
-import { Textarea } from '@/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/ui/card';
-import { ArrowLeft, Calendar, Clock, DollarSign, Users } from 'lucide-react';
-import { useApp } from '@/app/hooks';
-import { toast } from 'sonner';
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/ui/button";
+import { Input } from "@/ui/input";
+import { Label } from "@/ui/label";
+import { Textarea } from "@/ui/textarea";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { ArrowLeft, Calendar, Clock, DollarSign, Users } from "lucide-react";
+import { useApp } from "@/app/hooks";
+import { toast } from "sonner";
 
 export function CreateEventRoute() {
   const navigate = useNavigate();
-  const { addEvent } = useApp();
+  const { addEvent, user } = useApp();
   const [formData, setFormData] = useState({
-    name: '',
-    description: '',
-    date: '',
-    time: '',
-    duration: '',
-    price: '',
-    capacity: '',
-    imageUrl: ''
+    name: "",
+    description: "",
+    date: "",
+    time: "",
+    duration: "",
+    price: "",
+    capacity: "",
+    imageUrl: "",
   });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>,
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,7 +35,7 @@ export function CreateEventRoute() {
 
     // Validate required fields
     if (!formData.name || !formData.date || !formData.time) {
-      toast.error('Please fill in all required fields');
+      toast.error("Please fill in all required fields");
       return;
     }
 
@@ -50,33 +52,41 @@ export function CreateEventRoute() {
       price: parseFloat(formData.price) || 0,
       capacity: parseInt(formData.capacity) || 50,
       attendees: 0,
-      imageUrl: formData.imageUrl || 'https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&q=80',
-      status: 'upcoming' as const
+      imageUrl:
+        formData.imageUrl ||
+        "https://images.unsplash.com/photo-1511578314322-379afb476865?w=800&q=80",
+      status: "upcoming" as const,
+      createdBy: user?.id || "",
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
     try {
       await addEvent(newEvent);
-      toast.success('Event created successfully!');
-      
+      toast.success("Event created successfully!");
+
       // Reset form
       setFormData({
-        name: '',
-        description: '',
-        date: '',
-        time: '',
-        duration: '',
-        price: '',
-        capacity: '',
-        imageUrl: ''
+        name: "",
+        description: "",
+        date: "",
+        time: "",
+        duration: "",
+        price: "",
+        capacity: "",
+        imageUrl: "",
       });
 
       // Navigate to events page after a short delay
       setTimeout(() => {
-        navigate('/events');
+        navigate("/events");
       }, 1500);
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to create event. Please try again.';
-      console.error('Failed to create event:', error);
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to create event. Please try again.";
+      console.error("Failed to create event:", error);
       toast.error(errorMessage);
     }
   };
@@ -88,13 +98,15 @@ export function CreateEventRoute() {
         <div className="mb-8">
           <Button
             variant="ghost"
-            onClick={() => navigate('/events')}
+            onClick={() => navigate("/events")}
             className="mb-4"
           >
             <ArrowLeft className="size-4 mr-2" />
             Back to Events
           </Button>
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Create New Event</h1>
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+            Create New Event
+          </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
             Fill in the details to create a new Visually Speaking event
           </p>
@@ -221,9 +233,7 @@ export function CreateEventRoute() {
 
               {/* Image URL */}
               <div className="space-y-2">
-                <Label htmlFor="imageUrl">
-                  Image URL (optional)
-                </Label>
+                <Label htmlFor="imageUrl">Image URL (optional)</Label>
                 <Input
                   id="imageUrl"
                   name="imageUrl"
@@ -242,7 +252,7 @@ export function CreateEventRoute() {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => navigate('/events')}
+                  onClick={() => navigate("/events")}
                   className="flex-1"
                 >
                   Cancel
