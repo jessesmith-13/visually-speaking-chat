@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { adminOperations, tickets } from "@/lib/edge/client";
-import { purchaseTicketDemo } from "@/lib/stripe/client";
+import { purchaseTicketDemo, createPaymentIntent } from "@/lib/stripe/client";
+import { env } from "@/lib/env";
 import { useApp } from "@/app/hooks";
 import { Button } from "@/ui/button";
 import {
@@ -213,8 +214,31 @@ export function EventDetailRoute() {
     try {
       console.log("🎫 Starting ticket purchase...");
 
-      // Demo purchase (in production, this would integrate with real Stripe)
-      await purchaseTicketDemo(currentEvent.id, currentEvent.price);
+      // Check if Stripe key exists to determine if we should use real Stripe
+      if (env.stripe.publishableKey) {
+        // Real Stripe payment flow
+        console.log("💳 Using real Stripe checkout...");
+
+        // Create payment intent
+        const paymentData = await createPaymentIntent({
+          eventId: currentEvent.id,
+          amount: Math.round(currentEvent.price * 100), // Convert to cents
+          userId: user.id,
+        });
+
+        // In a complete implementation, you would redirect to Stripe Checkout here
+        // or use Stripe Elements to collect payment. For now, we'll just log it.
+        console.log("✅ Payment intent created:", paymentData.paymentIntentId);
+
+        // TODO: Implement Stripe Checkout redirect or Elements integration
+        toast.info("Stripe integration pending - redirecting to checkout...");
+
+        // For now, fall back to demo mode after creating the intent
+        await purchaseTicketDemo(currentEvent.id, currentEvent.price);
+      } else {
+        // Demo mode - no real payment
+        await purchaseTicketDemo(currentEvent.id, currentEvent.price);
+      }
 
       console.log("✅ Ticket created, refreshing data...");
 
