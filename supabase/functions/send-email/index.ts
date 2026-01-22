@@ -1,21 +1,27 @@
 /**
  * Send Email Edge Function
- * 
+ *
  * Admin-only endpoint to send emails via Resend
- * 
+ *
  * Endpoints:
  *   POST / - Send email(s)
- * 
+ *
  * Security: Requires admin authentication
- * Rate limiting: TODO - implement rate limiting per admin user
+ * Rate limiting: Sends emails sequentially to respect Resend's 2 req/sec limit
  */
 
-import { handleCors } from '../_shared/cors.ts';
-import { createAuthClient, createAdminClient } from '../_shared/supabase.ts';
-import { requireUser, requireAdmin } from '../_shared/auth.ts';
-import { json, badRequest, serverError } from '../_shared/http.ts';
-import { validateRequired, validateEmailList, validateString, sanitizeText } from '../_shared/validate.ts';
-import { RESEND_API_KEY } from '../_shared/env.ts';
+import { handleCors } from "../_shared/cors.ts";
+import { createAuthClient, createAdminClient } from "../_shared/supabase.ts";
+import { requireUser, requireAdmin } from "../_shared/auth.ts";
+import { json, badRequest, serverError } from "../_shared/http.ts";
+import {
+  validateRequired,
+  validateEmailList,
+  validateString,
+  sanitizeText,
+} from "../_shared/validate.ts";
+import { RESEND_API_KEY, getFromEmail } from "../_shared/env.ts";
+import { get } from "node:http";
 
 interface EmailRequest {
   to: string | string[];
@@ -31,35 +37,29 @@ Deno.serve(async (req) => {
 
   try {
     // Only allow POST
-    if (req.method !== 'POST') {
-      return badRequest('Method not allowed', corsHeaders);
+    if (req.method !== "POST") {
+      return badRequest("Method not allowed", corsHeaders);
     }
 
-    // Authenticate user
+    // Authenticate user with anon key client (respects RLS)
     const authClient = createAuthClient();
-    const userResult = await requireUser(req, authClient);
+    const userResult = await requireUser(req, authClient, corsHeaders);
     if (userResult instanceof Response) {
-      return new Response(userResult.body, {
-        status: userResult.status,
-        headers: { ...corsHeaders, ...Object.fromEntries(userResult.headers) },
-      });
+      return userResult;
     }
 
-    // Verify admin status
+    // Verify admin status using admin client
     const adminClient = createAdminClient();
     const adminResult = await requireAdmin(userResult.userId, adminClient);
     if (adminResult instanceof Response) {
-      return new Response(adminResult.body, {
-        status: adminResult.status,
-        headers: { ...corsHeaders, ...Object.fromEntries(adminResult.headers) },
-      });
+      return adminResult;
     }
 
     // Parse and validate request
-    const body = await req.json() as EmailRequest;
+    const body = (await req.json()) as EmailRequest;
 
     // Validate required fields
-    const requiredCheck = validateRequired(body, ['to', 'subject', 'message']);
+    const requiredCheck = validateRequired(body, ["to", "subject", "message"]);
     if (!requiredCheck.valid) {
       return badRequest(requiredCheck.error!, corsHeaders);
     }
@@ -80,7 +80,7 @@ Deno.serve(async (req) => {
     const sanitizedMessage = sanitizeText(body.message, 10000);
 
     // Validate email addresses
-    const recipients = Array.isArray(body.to) ? body.to.join(',') : body.to;
+    const recipients = Array.isArray(body.to) ? body.to.join(",") : body.to;
     const emailCheck = validateEmailList(recipients);
     if (!emailCheck.valid) {
       return badRequest(emailCheck.error!, corsHeaders);
@@ -88,65 +88,71 @@ Deno.serve(async (req) => {
 
     const emailList = emailCheck.emails!;
 
-    console.log('📧 Sending email:', { to: emailList.length, subject: body.subject });
-
-    // TODO: Rate limiting - track sends per admin user per hour
-    // Example: Check redis/database for send count in last hour, limit to 100
-
-    // Send emails via Resend
-    const emailPromises = emailList.map(async (email: string) => {
-      const response = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RESEND_API_KEY}`,
-        },
-        body: JSON.stringify({
-          from: 'Visually Speaking <noreply@visuallyspeaking.app>',
-          to: email,
-          subject: body.subject,
-          // Use plain text to avoid HTML injection
-          text: sanitizedMessage,
-          // Basic HTML wrapping (sanitized content)
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-              <h2 style="color: #2563eb;">${body.subject}</h2>
-              <div style="margin: 20px 0; line-height: 1.6; white-space: pre-wrap;">
-                ${sanitizedMessage}
-              </div>
-              <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
-              <p style="color: #6b7280; font-size: 14px;">
-                This email was sent from Visually Speaking - Video Chat for the Deaf & Hard of Hearing Community
-              </p>
-            </div>
-          `,
-        }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Resend API error:', errorData);
-        throw new Error(`Failed to send to ${email}: ${errorData.message || response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log(`✅ Email sent to ${email}:`, data.id);
-      return data;
+    console.log("📧 Sending email:", {
+      to: emailList.length,
+      subject: body.subject,
     });
 
-    // Wait for all emails
-    const results = await Promise.allSettled(emailPromises);
+    // Send emails sequentially with delay to respect rate limits
+    let successful = 0;
+    let failed = 0;
+    const errors: string[] = [];
 
-    // Count results
-    const successful = results.filter(r => r.status === 'fulfilled').length;
-    const failed = results.filter(r => r.status === 'rejected').length;
+    for (const email of emailList) {
+      try {
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${RESEND_API_KEY}`,
+          },
+          body: JSON.stringify({
+            from: getFromEmail(),
+            to: email,
+            subject: body.subject,
+            text: sanitizedMessage,
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #2563eb;">${body.subject}</h2>
+                <div style="margin: 20px 0; line-height: 1.6; white-space: pre-wrap;">
+                  ${sanitizedMessage}
+                </div>
+                <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+                <p style="color: #6b7280; font-size: 14px;">
+                  This email was sent from Visually Speaking - Video Chat for the Deaf & Hard of Hearing Community
+                </p>
+              </div>
+            `,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error("❌ Resend API error:", errorData);
+          errors.push(`${email}: ${errorData.message || response.statusText}`);
+          failed++;
+        } else {
+          const data = await response.json();
+          console.log(`✅ Email sent to ${email}:`, data.id);
+          successful++;
+        }
+
+        // Rate limit: Wait 600ms between emails (allows ~1.6 emails/sec, under 2/sec limit)
+        if (email !== emailList[emailList.length - 1]) {
+          // Don't wait after last email
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+      } catch (error) {
+        console.error(`❌ Error sending to ${email}:`, error);
+        errors.push(
+          `${email}: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+        failed++;
+      }
+    }
 
     if (failed > 0) {
       console.warn(`⚠️ ${failed} email(s) failed`);
-      const errors = results
-        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
-        .map(r => r.reason.message);
-
       return json(
         {
           emailsSent: successful,
@@ -154,7 +160,7 @@ Deno.serve(async (req) => {
           errors,
         },
         207, // Multi-Status
-        corsHeaders
+        corsHeaders,
       );
     }
 
@@ -165,7 +171,7 @@ Deno.serve(async (req) => {
         message: `Successfully sent ${successful} email(s)`,
       },
       200,
-      corsHeaders
+      corsHeaders,
     );
   } catch (error) {
     return serverError(error, corsHeaders);
