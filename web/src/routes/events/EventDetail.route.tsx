@@ -41,6 +41,19 @@ interface EventUpdate {
   creator_email?: string;
 }
 
+interface EventParticipant {
+  user_id: string;
+  user_email: string;
+  user_name: string;
+  ticket_id: string;
+  purchased_at: string;
+  profiles: {
+    full_name: string;
+    email: string;
+  };
+  payment_amount?: number;
+}
+
 export function EventDetailRoute() {
   const navigate = useNavigate();
   const { eventId } = useParams<{ eventId: string }>();
@@ -54,6 +67,8 @@ export function EventDetailRoute() {
   const [updateTitle, setUpdateTitle] = useState("");
   const [updateMessage, setUpdateMessage] = useState("");
   const [isPostingUpdate, setIsPostingUpdate] = useState(false);
+  const [participants, setParticipants] = useState<EventParticipant[]>([]);
+  const [loadingParticipants, setLoadingParticipants] = useState(false);
 
   // Edit event state
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -119,6 +134,31 @@ export function EventDetailRoute() {
 
     checkTicketStatus();
   }, [currentEvent, user, refreshUserTickets]);
+
+  // Fetch event participants (admin only)
+  useEffect(() => {
+    const fetchParticipants = async () => {
+      if (!currentEvent || !user?.isAdmin) return;
+
+      setLoadingParticipants(true);
+      try {
+        console.log("👥 Fetching event participants...");
+        const data = await adminOperations.getEventParticipants(
+          currentEvent.id,
+        );
+        setParticipants(data);
+        console.log("✅ Loaded", data.length, "participants");
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error("Error fetching participants:", errorMessage);
+      } finally {
+        setLoadingParticipants(false);
+      }
+    };
+
+    fetchParticipants();
+  }, [currentEvent, user?.isAdmin]);
 
   // Fetch event updates
   useEffect(() => {
@@ -704,6 +744,58 @@ export function EventDetailRoute() {
                     This will notify all {currentEvent.attendees} ticket holder
                     {currentEvent.attendees !== 1 ? "s" : ""}
                   </p>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Admin Participants List */}
+            {user?.isAdmin && (
+              <Card className="mt-6">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="size-5" />
+                    Event Participants ({participants.length})
+                  </CardTitle>
+                  <CardDescription>
+                    Users who have purchased tickets
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {loadingParticipants ? (
+                    <p className="text-sm text-gray-500">
+                      Loading participants...
+                    </p>
+                  ) : participants.length === 0 ? (
+                    <p className="text-sm text-gray-500">No participants yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {participants.map((participant) => (
+                        <div
+                          key={participant.user_id}
+                          className="p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg"
+                        >
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <p className="text-sm font-medium">
+                                {participant.profiles?.full_name ||
+                                  "Unknown User"}
+                              </p>
+                              <p className="text-xs text-gray-600 dark:text-gray-400">
+                                {participant.profiles?.email || "No email"}
+                              </p>
+                            </div>
+                            <Badge variant="secondary" className="text-xs">
+                              ${participant.payment_amount}
+                            </Badge>
+                          </div>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                            Purchased:{" "}
+                            {format(new Date(participant.purchased_at), "PPp")}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}

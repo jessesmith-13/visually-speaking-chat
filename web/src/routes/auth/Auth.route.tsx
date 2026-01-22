@@ -24,6 +24,7 @@ export function AuthRoute() {
   const [loginPassword, setLoginPassword] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
+  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState("");
@@ -168,6 +169,7 @@ export function AuthRoute() {
       // Trim whitespace from inputs
       const trimmedEmail = signupEmail.trim();
       const trimmedPassword = signupPassword.trim();
+      const trimmedFullName = fullName.trim();
 
       // Validate email format
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -179,6 +181,13 @@ export function AuthRoute() {
 
       if (!emailRegex.test(trimmedEmail)) {
         toast.error("Please enter a valid email address");
+        setLoading(false);
+        return;
+      }
+
+      // Validate full name
+      if (!trimmedFullName) {
+        toast.error("Please enter your full name");
         setLoading(false);
         return;
       }
@@ -201,7 +210,7 @@ export function AuthRoute() {
         password: trimmedPassword,
         options: {
           data: {
-            full_name: trimmedEmail.split("@")[0],
+            full_name: trimmedFullName,
           },
           emailRedirectTo: window.location.origin,
         },
@@ -227,7 +236,7 @@ export function AuthRoute() {
           toast.success("Account created successfully!");
           setUser({
             id: data.user.id,
-            name: trimmedEmail.split("@")[0],
+            name: trimmedFullName,
             email: trimmedEmail,
             purchasedTickets: [],
             isAdmin: false,
@@ -244,6 +253,7 @@ export function AuthRoute() {
           // Clear form
           setSignupEmail("");
           setSignupPassword("");
+          setFullName("");
         }
       }
     } catch (error: unknown) {
@@ -441,6 +451,18 @@ export function AuthRoute() {
 
               <TabsContent value="signup">
                 <form onSubmit={handleSignup} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-fullname">Full Name</Label>
+                    <Input
+                      id="signup-fullname"
+                      type="text"
+                      placeholder="John Doe"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      required
+                      disabled={loading}
+                    />
+                  </div>
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <Input
