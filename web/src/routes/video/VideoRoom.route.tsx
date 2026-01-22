@@ -1,28 +1,40 @@
-import { useState, useEffect, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Button } from '@/ui/button';
-import { Card, CardContent } from '@/ui/card';
-import { Badge } from '@/ui/badge';
-import { ArrowLeft, Users, Clock, Loader2, SkipForward, PhoneOff } from 'lucide-react';
-import { useApp } from '@/app/hooks';
-import { WebRTCVideoChat } from '@/features/matchmaking/components/WebRTCVideoChat';
-import { matchmaking } from '@/lib/edge/client';
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Button } from "@/ui/button";
+import { Card, CardContent } from "@/ui/card";
+import { Badge } from "@/ui/badge";
+import {
+  ArrowLeft,
+  Users,
+  Clock,
+  Loader2,
+  SkipForward,
+  PhoneOff,
+} from "lucide-react";
+import { useApp } from "@/app/hooks";
+import { DailyVideoChat } from "@/features/matchmaking/components/DailyVideoChat";
+import { matchmaking } from "@/lib/edge/client";
+import { supabase } from "@/lib/supabase/client";
 
 export function VideoRoomRoute() {
   const navigate = useNavigate();
   const { roomId } = useParams<{ roomId: string }>();
   const { events, user } = useApp();
-  const currentEvent = events.find(e => e.id === roomId);
-  const [matchStatus, setMatchStatus] = useState<'searching' | 'matched' | 'not_started'>('not_started');
-  const [roomName, setRoomName] = useState<string>('');
+  const currentEvent = events.find((e) => e.id === roomId);
+  const [matchStatus, setMatchStatus] = useState<
+    "searching" | "matched" | "not_started"
+  >("not_started");
+  const [roomName, setRoomName] = useState<string>("");
+  const [dailyUrl, setDailyUrl] = useState<string>("");
   const [connectionTime, setConnectionTime] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState(0);
   const [isJoining, setIsJoining] = useState(false);
-  const [permissionError, setPermissionError] = useState<string>('');
+  const [permissionError, setPermissionError] = useState<string>("");
   const timerRef = useRef<number | null>(null);
   const pollingRef = useRef<number | null>(null);
-  
-  const hasTicket = user?.purchasedTickets.includes(currentEvent?.id || '') || false;
+
+  const hasTicket =
+    user?.purchasedTickets.includes(currentEvent?.id || "") || false;
 
   // Subscribe to matchmaking updates
   useEffect(() => {
@@ -34,33 +46,47 @@ export function VideoRoomRoute() {
       try {
         // Check initial status (silently fail if JWT issues)
         const status = await matchmaking.getStatus(currentEvent.id);
-        
-        if (status?.status === 'matched' && status.roomId) {
-          setMatchStatus('matched');
+
+        if (status?.status === "matched" && status.roomId) {
+          setMatchStatus("matched");
           setRoomName(status.roomId);
-        } else if (status?.status === 'waiting') {
-          setMatchStatus('searching');
+        } else if (status?.status === "waiting") {
+          setMatchStatus("searching");
         }
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
         // Silently ignore JWT errors - user can still join queue via button
-        console.warn('⚠️ Could not fetch initial matchmaking status (will retry on join):', errorMessage);
+        console.warn(
+          "⚠️ Could not fetch initial matchmaking status (will retry on join):",
+          errorMessage,
+        );
       }
 
       // Subscribe to changes
       unsubscribe = matchmaking.subscribeToMatchmaking(
         currentEvent.id,
         user.id,
-        (data) => {
-          console.log('Matchmaking update received:', data);
-          
+        async (data) => {
+          console.log("Matchmaking update received:", data);
+
           if (data.is_matched && data.current_room_id) {
-            setMatchStatus('matched');
+            setMatchStatus("matched");
             setRoomName(data.current_room_id);
           } else if (!data.is_matched) {
-            setMatchStatus('searching');
+            // ONLY set to searching if we're not already matched
+            // This prevents unmounting DailyVideoChat when joinQueue resets our status
+            setMatchStatus((prev) => {
+              if (prev === "matched") {
+                console.log(
+                  "⏭️ Ignoring is_matched=false while in matched state",
+                );
+                return prev; // Stay matched
+              }
+              return "searching";
+            });
           }
-        }
+        },
       );
     };
 
@@ -73,9 +99,44 @@ export function VideoRoomRoute() {
     };
   }, [currentEvent, user, hasTicket]);
 
+  // Fetch Daily.co URL when we get a room match
+  useEffect(() => {
+    if (!roomName) return;
+
+    const fetchDailyUrl = async () => {
+      console.log("🎥 Fetching Daily.co URL for room:", roomName);
+
+      try {
+        const { data, error } = await supabase
+          .from("video_rooms")
+          .select("daily_url")
+          .eq("id", roomName)
+          .single();
+
+        if (error) {
+          console.error("❌ Error fetching Daily URL:", error);
+          return;
+        }
+
+        if (data?.daily_url) {
+          console.log("✅ Daily.co URL found:", data.daily_url);
+          setDailyUrl(data.daily_url);
+        } else {
+          console.warn("⚠️ No Daily URL yet, will retry...");
+          // Retry after 2 seconds if URL not ready yet
+          setTimeout(fetchDailyUrl, 2000);
+        }
+      } catch (error) {
+        console.error("❌ Error fetching Daily URL:", error);
+      }
+    };
+
+    fetchDailyUrl();
+  }, [roomName]);
+
   // Polling for matches while searching
   useEffect(() => {
-    if (!currentEvent || matchStatus !== 'searching') {
+    if (!currentEvent || matchStatus !== "searching") {
       // Clear polling if not searching
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
@@ -84,30 +145,27 @@ export function VideoRoomRoute() {
       return;
     }
 
-    console.log('🔄 Starting polling for matches...');
+    console.log("🔄 Starting polling for matches...");
 
-    // Poll every 5 seconds (reduced from 2 to avoid rate limits)
+    // Poll every 3 seconds to check for matches
     pollingRef.current = window.setInterval(async () => {
-      console.log('🔄 Polling for match...');
-      
+      console.log("🔄 Polling for match...");
+
       try {
-        // Trigger matching logic
-        await matchmaking.triggerMatching(currentEvent.id);
-        
-        // Then check our status
+        // Just check our status - matching happens automatically on the backend
         const status = await matchmaking.getStatus(currentEvent.id);
-        
-        if (status?.status === 'matched' && status.roomId) {
-          console.log('✅ Match found via polling!');
-          setMatchStatus('matched');
+
+        if (status?.status === "matched" && status.roomId) {
+          console.log("✅ Match found via polling!");
+          setMatchStatus("matched");
           setRoomName(status.roomId);
         }
       } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        // Silently ignore JWT errors during polling
-        console.warn('⚠️ Polling error (JWT issue):', errorMessage);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        console.warn("⚠️ Polling error:", errorMessage);
       }
-    }, 5000); // Changed from 2000ms to 5000ms
+    }, 3000);
 
     return () => {
       if (pollingRef.current) {
@@ -119,7 +177,7 @@ export function VideoRoomRoute() {
 
   // Timer for connection duration
   useEffect(() => {
-    if (matchStatus === 'matched') {
+    if (matchStatus === "matched") {
       timerRef.current = window.setInterval(() => {
         setConnectionTime((prev) => prev + 1);
       }, 1000);
@@ -144,11 +202,21 @@ export function VideoRoomRoute() {
     setOnlineUsers(count);
   }, []);
 
-  // Cleanup on unmount
+  // Cleanup on unmount - use ref to track status
+  const matchStatusRef = useRef(matchStatus);
+  matchStatusRef.current = matchStatus;
+
   useEffect(() => {
     return () => {
-      if (currentEvent) {
-        matchmaking.leaveQueue(currentEvent.id);
+      // Only leave if actually in queue or matched
+      if (
+        currentEvent &&
+        (matchStatusRef.current === "searching" ||
+          matchStatusRef.current === "matched")
+      ) {
+        matchmaking.leaveQueue(currentEvent.id).catch((err) => {
+          console.warn("⚠️ Error leaving queue on unmount:", err);
+        });
       }
     };
   }, [currentEvent]);
@@ -159,9 +227,7 @@ export function VideoRoomRoute() {
         <Card>
           <CardContent className="pt-6">
             <p className="mb-4">Please select an event first</p>
-            <Button onClick={() => navigate('/events')}>
-              Go to Events
-            </Button>
+            <Button onClick={() => navigate("/events")}>Go to Events</Button>
           </CardContent>
         </Card>
       </div>
@@ -185,42 +251,20 @@ export function VideoRoomRoute() {
 
   const handleStartMatching = async () => {
     if (!currentEvent) return;
-    
+
     setIsJoining(true);
-    setPermissionError('');
-    
+    setPermissionError("");
+
     try {
-      // Request camera access FIRST
-      console.log('🎥 Requesting camera access...');
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      
-      console.log('✅ Camera access granted');
-      
-      // Stop the test stream immediately
-      stream.getTracks().forEach(track => track.stop());
-      
-      // Now join the queue
+      console.log("📋 Joining matchmaking queue...");
+
       await matchmaking.joinQueue(currentEvent.id);
-      setMatchStatus('searching');
+      setMatchStatus("searching");
     } catch (error: unknown) {
-      console.error('❌ Camera access error:', error);
-      
-      const err = error as { name?: string };
-      
-      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-        setPermissionError(
-          'Camera access was denied. Please click the camera icon in your browser\'s address bar and allow camera access, then try again.'
-        );
-      } else if (err.name === 'NotFoundError') {
-        setPermissionError('No camera found. Please connect a camera and try again.');
-      } else {
-        setPermissionError(
-          '⚠️ Camera access blocked by iframe. To use video chat, please open this app in a new tab (not in Figma Make\'s preview). Copy the URL and open it in a new browser tab.'
-        );
-      }
+      console.error("❌ Error joining queue:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      setPermissionError(`Failed to join queue: ${errorMessage}`);
     } finally {
       setIsJoining(false);
     }
@@ -228,16 +272,17 @@ export function VideoRoomRoute() {
 
   const handleNext = async () => {
     if (!currentEvent) return;
-    
-    setMatchStatus('searching');
+
+    setMatchStatus("searching");
     setConnectionTime(0);
-    
+    setDailyUrl("");
+
     // Leave current match and rejoin queue
     try {
       await matchmaking.leaveQueue(currentEvent.id);
       await matchmaking.joinQueue(currentEvent.id);
     } catch (error) {
-      console.error('Error finding next partner:', error);
+      console.error("Error finding next partner:", error);
     }
   };
 
@@ -245,13 +290,13 @@ export function VideoRoomRoute() {
     if (currentEvent) {
       await matchmaking.leaveQueue(currentEvent.id);
     }
-    navigate('/events');
+    navigate("/events");
   };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
   };
 
   return (
@@ -277,7 +322,7 @@ export function VideoRoomRoute() {
                     <Users className="size-4" />
                     <span>{onlineUsers} online</span>
                   </div>
-                  {matchStatus === 'matched' && (
+                  {matchStatus === "matched" && (
                     <div className="flex items-center gap-1">
                       <Clock className="size-4" />
                       <span>{formatTime(connectionTime)}</span>
@@ -295,54 +340,46 @@ export function VideoRoomRoute() {
 
       {/* Video Area */}
       <div className="container mx-auto px-4 py-8">
-        {/* Iframe Warning */}
-        <div className="mb-4 p-4 bg-yellow-900/50 border border-yellow-700 rounded-lg">
-          <div className="flex items-start gap-3">
-            <div className="text-yellow-400 text-xl mt-0.5 flex-shrink-0">⚠️</div>
-            <div>
-              <p className="text-yellow-200 font-medium mb-1">Camera Access Required</p>
-              <p className="text-yellow-300 text-sm mb-2">
-                If you're viewing this in Figma Make's preview, camera access may be blocked by iframe security.
-              </p>
-              <p className="text-yellow-300 text-sm font-semibold">
-                <strong>Solution:</strong> Right-click anywhere on this page → "Open Frame in New Tab" or copy the URL and paste it in a new browser tab.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {matchStatus === 'searching' && (
+        {matchStatus === "searching" && (
           <div className="mb-4 p-4 bg-blue-900/50 border border-blue-700 rounded-lg">
             <div className="flex items-start gap-3">
               <Loader2 className="size-5 text-blue-400 mt-0.5 flex-shrink-0 animate-spin" />
               <div>
-                <p className="text-blue-200 font-medium mb-1">Searching for a partner...</p>
-                <p className="text-blue-300 text-sm">We're matching you with someone right now. This usually takes just a few seconds!</p>
+                <p className="text-blue-200 font-medium mb-1">
+                  Searching for a partner...
+                </p>
+                <p className="text-blue-300 text-sm">
+                  We're matching you with someone right now. This usually takes
+                  just a few seconds!
+                </p>
               </div>
             </div>
           </div>
         )}
-        
+
         {/* Video Container */}
         <div className="mb-8">
           <Card className="bg-gray-800 border-gray-700">
             <CardContent className="p-0">
               <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
-                {matchStatus === 'not_started' ? (
+                {matchStatus === "not_started" ? (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center max-w-md px-4">
                       <Users className="size-16 text-gray-600 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">Ready to Connect?</h3>
+                      <h3 className="text-xl font-semibold mb-2">
+                        Ready to Connect?
+                      </h3>
                       <p className="text-gray-400 mb-6">
-                        Click the button below to start meeting other attendees through random video chat pairings.
+                        Click the button below to start meeting other attendees
+                        through random video chat pairings.
                       </p>
                       {permissionError && (
                         <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-sm text-red-200">
                           {permissionError}
                         </div>
                       )}
-                      <Button 
-                        size="lg" 
+                      <Button
+                        size="lg"
                         onClick={handleStartMatching}
                         disabled={isJoining}
                         className="bg-blue-600 hover:bg-blue-700"
@@ -350,44 +387,50 @@ export function VideoRoomRoute() {
                         {isJoining ? (
                           <>
                             <Loader2 className="size-5 mr-2 animate-spin" />
-                            Requesting Camera Access...
+                            Joining Queue...
                           </>
                         ) : (
-                          'Start Matching'
+                          "Start Matching"
                         )}
                       </Button>
                     </div>
                   </div>
-                ) : matchStatus === 'searching' ? (
+                ) : matchStatus === "searching" ? (
                   <div className="absolute inset-0 flex items-center justify-center">
                     <div className="text-center">
                       <Loader2 className="size-12 text-blue-500 mx-auto mb-4 animate-spin" />
                       <p className="text-gray-400">Finding your match...</p>
                     </div>
                   </div>
-                ) : matchStatus === 'matched' ? (
-                  <div className="p-4">
-                    <WebRTCVideoChat
-                      roomId={roomName}
-                      userId={user.id}
+                ) : matchStatus === "matched" ? (
+                  dailyUrl ? (
+                    <DailyVideoChat
+                      roomUrl={dailyUrl}
                       userName={user.name}
                       onLeave={handleLeave}
+                      onNext={handleNext}
                     />
-                  </div>
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <div className="text-center">
+                        <Loader2 className="size-12 text-blue-500 mx-auto mb-4 animate-spin" />
+                        <p className="text-gray-400">Creating video room...</p>
+                      </div>
+                    </div>
+                  )
                 ) : null}
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Controls */}
-        {matchStatus !== 'not_started' && matchStatus !== 'matched' && (
+        {/* Controls - Only show when matched and in call */}
+        {matchStatus === "matched" && dailyUrl && (
           <div className="flex items-center justify-center gap-4">
             <Button
               size="lg"
               variant="default"
               onClick={handleNext}
-              disabled={matchStatus === 'searching'}
               className="h-14 px-8"
             >
               <SkipForward className="size-6 mr-2" />
@@ -413,17 +456,25 @@ export function VideoRoomRoute() {
                 <h3 className="font-semibold mb-2">How it works:</h3>
                 <ul className="text-sm text-gray-300 space-y-1">
                   <li>• Click "Start Matching" to join the queue</li>
-                  <li>• You'll be randomly paired with another event attendee</li>
-                  <li>• Both participants join the same video room automatically</li>
+                  <li>
+                    • You'll be randomly paired with another event attendee
+                  </li>
+                  <li>
+                    • Both participants join the same video room automatically
+                  </li>
                   <li>• Click "Next Partner" to be matched with someone new</li>
-                  <li>• Use the controls in the video window to toggle camera/mic</li>
+                  <li>
+                    • Use the controls in the video window to toggle camera/mic
+                  </li>
                   <li>• Click the red phone icon to leave the event</li>
                 </ul>
               </div>
               <div className="border-t border-gray-700 pt-4">
                 <p className="text-sm text-gray-400">
-                  <strong>Note:</strong> This uses WebRTC for secure peer-to-peer video connections. 
-                  The matchmaking system pairs you randomly with other attendees who have purchased tickets to this event.
+                  <strong>Note:</strong> Video calls are powered by Daily.co for
+                  reliable, high-quality connections. The matchmaking system
+                  pairs you randomly with other attendees who have purchased
+                  tickets to this event.
                 </p>
               </div>
             </div>

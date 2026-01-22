@@ -455,8 +455,14 @@ export const matchmaking = {
       )
       .subscribe();
 
+    // 🔥 FIX: Wrap cleanup in try-catch to silence WebSocket errors
     return () => {
-      supabase.removeChannel(channel);
+      try {
+        supabase.removeChannel(channel);
+      } catch {
+        // Ignore WebSocket cleanup errors (happens during navigation)
+        console.log("⚠️ Subscription cleanup (expected during navigation)");
+      }
     };
   },
 };
