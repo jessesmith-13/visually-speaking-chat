@@ -274,14 +274,14 @@ export const adminOperations = {
 
 export const tickets = {
   /**
-   * Create a Stripe Payment Intent
+   * Create a Stripe Checkout Session
    */
   async createPaymentIntent(
     eventId: string,
     amount: number,
   ): Promise<{
-    clientSecret: string;
-    paymentIntentId: string;
+    sessionId: string;
+    checkoutUrl: string;
   }> {
     return await callEdgeFunction("tickets", "/create-payment-intent", {
       method: "POST",

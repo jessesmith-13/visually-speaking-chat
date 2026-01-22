@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
       {
         pattern: /^\/create-payment-intent$/,
         method: "POST",
-        handler: async (req, _userId, _, corsHeaders) => {
+        handler: async (req, userId, _, corsHeaders) => {
           const body: CreatePaymentIntentBody = await req.json();
           const requiredCheck = validateRequired(body, ["eventId", "amount"]);
           if (!requiredCheck.valid) {
@@ -96,7 +96,7 @@ Deno.serve(async (req) => {
           const { eventId, amount } = body;
 
           console.log(
-            `💳 Creating payment intent: event=${eventId}, amount=$${amount}`,
+            `💳 Creating Stripe Checkout Session: event=${eventId}, amount=$${amount}`,
           );
 
           // Validate amount
@@ -115,10 +115,10 @@ Deno.serve(async (req) => {
             );
           }
 
-          // Check event exists and has capacity
+          // Check event exists
           const { data: event, error: eventError } = await supabaseAdmin
             .from("events")
-            .select("capacity, attendees, name")
+            .select("capacity, attendees, name, price")
             .eq("id", eventId)
             .single();
 
@@ -130,26 +130,76 @@ Deno.serve(async (req) => {
             return badRequest("Event is sold out", corsHeaders);
           }
 
-          // Create Stripe Payment Intent
-          const paymentIntent = await stripe.paymentIntents.create({
-            amount: Math.round(amount * 100), // Convert to cents
-            currency: "usd",
+          // Verify amount matches
+          const expectedAmount = Math.round(event.price * 100);
+          if (amount !== expectedAmount) {
+            return badRequest("Amount mismatch", corsHeaders);
+          }
+
+          // Check if user already has ticket
+          const { data: existingTicket } = await supabaseAdmin
+            .from("tickets")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("event_id", eventId)
+            .eq("status", "active")
+            .maybeSingle();
+
+          if (existingTicket) {
+            return badRequest(
+              "You already have a ticket for this event",
+              corsHeaders,
+            );
+          }
+
+          // Get origin for redirect URLs
+          // Prefer origin header, fall back to referer, then localhost
+          let origin = req.headers.get("origin");
+
+          if (!origin) {
+            const referer = req.headers.get("referer");
+            if (referer) {
+              const url = new URL(referer);
+              origin = `${url.protocol}//${url.host}`;
+            } else {
+              origin = "http://localhost:5173";
+            }
+          }
+
+          console.log("🔗 Using origin for redirects:", origin);
+
+          // Create Stripe Checkout Session
+          const session = await stripe.checkout.sessions.create({
+            payment_method_types: ["card"],
+            line_items: [
+              {
+                price_data: {
+                  currency: "usd",
+                  product_data: {
+                    name: event.name,
+                    description: `Ticket for ${event.name}`,
+                  },
+                  unit_amount: amount,
+                },
+                quantity: 1,
+              },
+            ],
+            mode: "payment",
+            success_url: `${origin}/events/${eventId}?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${origin}/events/${eventId}?payment=cancelled`,
             metadata: {
               eventId,
               userId,
               eventName: event.name,
             },
-            automatic_payment_methods: {
-              enabled: true,
-            },
           });
 
-          console.log("✅ Payment intent created:", paymentIntent.id);
+          console.log("✅ Checkout session created:", session.id);
 
           return json(
             {
-              clientSecret: paymentIntent.client_secret,
-              paymentIntentId: paymentIntent.id,
+              sessionId: session.id,
+              checkoutUrl: session.url,
             },
             200,
             corsHeaders,
@@ -186,20 +236,78 @@ Deno.serve(async (req) => {
           // Verify payment with Stripe (if not demo mode)
           if (!isDemoMode && paymentIntentId && stripe) {
             try {
-              const paymentIntent =
-                await stripe.paymentIntents.retrieve(paymentIntentId);
+              // If it's a checkout session (starts with cs_), verify the session
+              if (paymentIntentId.startsWith("cs_")) {
+                console.log(
+                  "🔍 Verifying Stripe Checkout Session:",
+                  paymentIntentId,
+                );
+                const session =
+                  await stripe.checkout.sessions.retrieve(paymentIntentId);
 
-              if (paymentIntent.status !== "succeeded") {
-                return badRequest("Payment not completed", corsHeaders);
+                if (session.payment_status !== "paid") {
+                  console.error("❌ Session not paid:", session.payment_status);
+                  return badRequest("Payment not completed", corsHeaders);
+                }
+
+                // Verify amount (compare cents to cents)
+                const paidAmountInCents = session.amount_total || 0;
+                if (Math.abs(paidAmountInCents - amount) > 0.01) {
+                  console.error(
+                    "❌ Amount mismatch:",
+                    paidAmountInCents,
+                    "cents vs",
+                    amount,
+                    "cents",
+                  );
+                  return badRequest("Payment amount mismatch", corsHeaders);
+                }
+
+                console.log(
+                  "✅ Checkout session verified:",
+                  paymentIntentId,
+                  "- Paid:",
+                  paidAmountInCents,
+                  "cents",
+                );
+              } else {
+                // It's a payment intent
+                console.log(
+                  "🔍 Verifying Stripe Payment Intent:",
+                  paymentIntentId,
+                );
+                const paymentIntent =
+                  await stripe.paymentIntents.retrieve(paymentIntentId);
+
+                if (paymentIntent.status !== "succeeded") {
+                  console.error(
+                    "❌ Payment not succeeded:",
+                    paymentIntent.status,
+                  );
+                  return badRequest("Payment not completed", corsHeaders);
+                }
+
+                // Verify amount (compare cents to cents)
+                const paidAmountInCents = paymentIntent.amount;
+                if (Math.abs(paidAmountInCents - amount) > 0.01) {
+                  console.error(
+                    "❌ Amount mismatch:",
+                    paidAmountInCents,
+                    "cents vs",
+                    amount,
+                    "cents",
+                  );
+                  return badRequest("Payment amount mismatch", corsHeaders);
+                }
+
+                console.log(
+                  "✅ Payment intent verified:",
+                  paymentIntentId,
+                  "- Paid:",
+                  paidAmountInCents,
+                  "cents",
+                );
               }
-
-              // Verify amount
-              const paidAmount = paymentIntent.amount / 100;
-              if (Math.abs(paidAmount - amount) > 0.01) {
-                return badRequest("Payment amount mismatch", corsHeaders);
-              }
-
-              console.log("✅ Payment verified with Stripe");
             } catch (error: unknown) {
               console.error("❌ Stripe verification error:", error);
               return serverError(error, corsHeaders);
@@ -208,25 +316,73 @@ Deno.serve(async (req) => {
             console.log("⚠️ DEMO MODE - Skipping Stripe verification");
           }
 
-          // Use atomic RPC to purchase ticket
-          const { data, error } = await supabaseAdmin.rpc("purchase_ticket", {
-            p_event_id: eventId,
-            p_user_id: userId,
-            p_amount: amount,
-            p_payment_intent_id: paymentIntentId || `demo_${Date.now()}`,
-          });
+          // Check if user already has a ticket
+          const { data: existingTicket } = await supabaseAdmin
+            .from("tickets")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("event_id", eventId)
+            .eq("status", "active")
+            .maybeSingle();
 
-          if (error) {
-            console.error("❌ RPC error:", error);
-            return serverError(error, corsHeaders);
+          if (existingTicket) {
+            console.error("❌ User already has ticket");
+            return badRequest(
+              "You already have a ticket for this event",
+              corsHeaders,
+            );
           }
 
-          const result = data[0];
-          if (!result.success) {
-            return badRequest(result.error_message, corsHeaders);
+          // Check event capacity
+          const { data: event, error: eventError } = await supabaseAdmin
+            .from("events")
+            .select("capacity, attendees")
+            .eq("id", eventId)
+            .single();
+
+          if (eventError || !event) {
+            console.error("❌ Event not found:", eventError);
+            return notFound("Event not found", corsHeaders);
           }
 
-          console.log("✅ Ticket purchased:", result.ticket_id);
+          if (event.attendees >= event.capacity) {
+            console.error("❌ Event sold out");
+            return badRequest("Event is sold out", corsHeaders);
+          }
+
+          // Create ticket
+          const { data: newTicket, error: ticketError } = await supabaseAdmin
+            .from("tickets")
+            .insert({
+              user_id: userId,
+              event_id: eventId,
+              payment_amount: amount / 100, // Convert cents to dollars
+              stripe_payment_intent_id: paymentIntentId || `demo_${Date.now()}`,
+              status: "active",
+            })
+            .select()
+            .single();
+
+          if (ticketError || !newTicket) {
+            console.error("❌ Error creating ticket:", ticketError);
+            return serverError(
+              ticketError || new Error("Failed to create ticket"),
+              corsHeaders,
+            );
+          }
+
+          // Increment event attendees
+          const { error: updateError } = await supabaseAdmin
+            .from("events")
+            .update({ attendees: event.attendees + 1 })
+            .eq("id", eventId);
+
+          if (updateError) {
+            console.error("❌ Error updating attendees:", updateError);
+            // Ticket created but attendee count not updated - log but don't fail
+          }
+
+          console.log("✅ Ticket purchased:", newTicket.id);
 
           // Record in stripe_payments table (optional)
           try {
@@ -247,14 +403,7 @@ Deno.serve(async (req) => {
           return json(
             {
               success: true,
-              ticket: {
-                id: result.ticket_id,
-                event_id: result.event_id,
-                user_id: result.user_id,
-                payment_amount: result.payment_amount,
-                status: result.status,
-                purchased_at: result.purchased_at,
-              },
+              ticket: newTicket,
             },
             201,
             corsHeaders,
@@ -324,20 +473,30 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Use atomic RPC to cancel ticket
-          const { data, error } = await supabaseAdmin.rpc("cancel_ticket", {
-            p_ticket_id: ticketId,
-            p_user_id: userId,
-          });
+          // Cancel the ticket
+          const { error: cancelError } = await supabaseAdmin
+            .from("tickets")
+            .update({ status: "cancelled" })
+            .eq("id", ticketId)
+            .eq("user_id", userId);
 
-          if (error) {
-            console.error("❌ RPC error:", error);
-            return serverError(error, corsHeaders);
+          if (cancelError) {
+            console.error("❌ Error cancelling ticket:", cancelError);
+            return serverError(cancelError, corsHeaders);
           }
 
-          const result = data[0];
-          if (!result.success) {
-            return badRequest(result.error_message, corsHeaders);
+          // Decrement event attendees
+          const { data: event } = await supabaseAdmin
+            .from("events")
+            .select("attendees")
+            .eq("id", ticket.event_id)
+            .single();
+
+          if (event) {
+            await supabaseAdmin
+              .from("events")
+              .update({ attendees: Math.max(0, event.attendees - 1) })
+              .eq("id", ticket.event_id);
           }
 
           console.log("✅ Ticket cancelled");
