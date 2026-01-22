@@ -30,6 +30,10 @@ interface EventParticipant {
   user_name: string;
   ticket_id: string;
   purchased_at: string;
+  profiles: {
+    full_name: string;
+    email: string;
+  };
 }
 
 interface CreateEventData {
