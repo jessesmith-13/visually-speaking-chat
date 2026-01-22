@@ -1,6 +1,7 @@
-import { ReactNode } from 'react';
-import { Toaster } from 'sonner';
-import { AppContextProvider } from './contexts/AppProvider';
+import { ReactNode } from "react";
+import { Toaster } from "@/ui/sonner";
+import { ThemeProvider } from "next-themes";
+import { AppContextProvider } from "./contexts/AppProvider";
 
 // ============================================================================
 // Combined App Providers
@@ -8,9 +9,11 @@ import { AppContextProvider } from './contexts/AppProvider';
 
 export function AppProviders({ children }: { children: ReactNode }) {
   return (
-    <AppContextProvider>
-      {children}
-      <Toaster />
-    </AppContextProvider>
+    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem>
+      <AppContextProvider>
+        {children}
+        <Toaster />
+      </AppContextProvider>
+    </ThemeProvider>
   );
 }

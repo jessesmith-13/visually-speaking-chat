@@ -21,7 +21,6 @@ import {
   sanitizeText,
 } from "../_shared/validate.ts";
 import { RESEND_API_KEY, getFromEmail } from "../_shared/env.ts";
-import { get } from "node:http";
 
 interface EmailRequest {
   to: string | string[];
