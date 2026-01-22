@@ -26,14 +26,23 @@ export async function createPaymentIntent(
   request: CreatePaymentIntentRequest,
 ): Promise<CreatePaymentIntentResponse> {
   try {
+    console.log("🔐 Getting session for Stripe payment intent...");
+
     // Get current session for authorization
     const {
       data: { session },
     } = await supabase.auth.getSession();
 
-    if (!session) {
+    if (!session?.access_token) {
+      console.error("❌ No session or access token found");
       throw new Error("Not authenticated");
     }
+
+    console.log("✅ Session found, calling Edge Function...");
+    console.log("📤 Request:", {
+      eventId: request.eventId,
+      amount: request.amount,
+    });
 
     // Call the Edge Function - EXPLICITLY pass auth header
     const { data, error } = await supabase.functions.invoke(
@@ -50,9 +59,16 @@ export async function createPaymentIntent(
     );
 
     if (error) {
-      console.error("Error calling stripe-create-payment-intent:", error);
+      console.error("❌ Error calling stripe-create-payment-intent:", error);
       throw new Error(error.message || "Failed to create payment intent");
     }
+
+    if (!data) {
+      console.error("❌ No data returned from Edge Function");
+      throw new Error("No data returned from payment intent creation");
+    }
+
+    console.log("✅ Payment intent created:", data);
 
     return {
       clientSecret: data.clientSecret,
@@ -61,7 +77,7 @@ export async function createPaymentIntent(
   } catch (error: unknown) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("Error creating payment intent:", errorMessage);
+    console.error("💥 Error creating payment intent:", errorMessage);
     throw error;
   }
 }
