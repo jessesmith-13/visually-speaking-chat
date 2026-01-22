@@ -9,7 +9,6 @@ export const STRIPE_PUBLISHABLE_KEY =
 export interface CreatePaymentIntentRequest {
   eventId: string;
   amount: number;
-  userId: string;
 }
 
 export interface CreatePaymentIntentResponse {
@@ -36,13 +35,16 @@ export async function createPaymentIntent(
       throw new Error("Not authenticated");
     }
 
-    // Call the Edge Function - Supabase client automatically adds auth header
+    // Call the Edge Function - EXPLICITLY pass auth header
     const { data, error } = await supabase.functions.invoke(
       "stripe-create-payment-intent",
       {
         body: {
           eventId: request.eventId,
           amount: request.amount,
+        },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
         },
       },
     );

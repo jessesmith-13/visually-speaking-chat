@@ -223,7 +223,6 @@ export function EventDetailRoute() {
         const paymentData = await createPaymentIntent({
           eventId: currentEvent.id,
           amount: Math.round(currentEvent.price * 100), // Convert to cents
-          userId: user.id,
         });
 
         // In a complete implementation, you would redirect to Stripe Checkout here
