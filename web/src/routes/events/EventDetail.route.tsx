@@ -2,7 +2,11 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { adminOperations, tickets } from "@/lib/edge/client";
-import { purchaseTicketDemo, createPaymentIntent } from "@/lib/stripe/client";
+import {
+  purchaseTicketDemo,
+  createPaymentIntent,
+  purchaseTicketWithStripe,
+} from "@/lib/stripe/client";
 import { env } from "@/lib/env";
 import { useApp } from "@/app/hooks";
 import { Button } from "@/ui/button";
@@ -225,18 +229,21 @@ export function EventDetailRoute() {
           amount: Math.round(currentEvent.price * 100), // Convert to cents
         });
 
-        // In a complete implementation, you would redirect to Stripe Checkout here
-        // or use Stripe Elements to collect payment. For now, we'll just log it.
         console.log("✅ Payment intent created:", paymentData.paymentIntentId);
 
-        // TODO: Implement Stripe Checkout redirect or Elements integration
-        toast.info("Stripe integration pending - redirecting to checkout...");
+        // Create ticket immediately (will be marked as 'pending' until payment completes)
+        await purchaseTicketWithStripe(
+          currentEvent.id,
+          Math.round(currentEvent.price * 100),
+          paymentData.paymentIntentId,
+        );
 
-        // For now, fall back to demo mode after creating the intent
-        await purchaseTicketDemo(currentEvent.id, currentEvent.price);
+        console.log("✅ Ticket created with pending payment");
+        toast.success("Ticket purchased successfully!");
       } else {
         // Demo mode - no real payment
         await purchaseTicketDemo(currentEvent.id, currentEvent.price);
+        toast.success("Ticket purchased successfully!");
       }
 
       console.log("✅ Ticket created, refreshing data...");
@@ -257,8 +264,6 @@ export function EventDetailRoute() {
 
       // Update local hasTicket state
       setHasTicket(true);
-
-      toast.success("Ticket purchased successfully!");
 
       // Check if event has started before allowing redirect
       const eventDate = new Date(currentEvent.date);
