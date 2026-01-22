@@ -2,12 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import { adminOperations, tickets } from "@/lib/edge/client";
-import {
-  purchaseTicketDemo,
-  createPaymentIntent,
-  purchaseTicketWithStripe,
-} from "@/lib/stripe/client";
-import { env } from "@/lib/env";
 import { useApp } from "@/app/hooks";
 import { Button } from "@/ui/button";
 import {
@@ -34,6 +28,7 @@ import {
 import { Badge } from "@/ui/badge";
 import { toast } from "sonner";
 import { EditEventDialog } from "./components/EditEventDialog";
+import { purchaseTicketWithStripe } from "@/lib/stripe/client";
 
 interface EventUpdate {
   id: string;
@@ -188,6 +183,50 @@ export function EventDetailRoute() {
     fetchEventUpdates();
   }, [currentEvent]);
 
+  // Handle Stripe redirect back
+  useEffect(() => {
+    const handleStripeReturn = async () => {
+      if (!currentEvent) return;
+
+      const params = new URLSearchParams(window.location.search);
+      const paymentStatus = params.get("payment");
+      const sessionId = params.get("session_id");
+
+      if (paymentStatus === "success" && sessionId) {
+        console.log("✅ Payment successful, creating ticket...");
+
+        try {
+          // Call the purchase endpoint which will verify payment with Stripe
+          await purchaseTicketWithStripe(
+            currentEvent.id,
+            Math.round(currentEvent.price * 100),
+            sessionId,
+          );
+
+          toast.success("Ticket purchased successfully!");
+
+          await Promise.all([refreshUserTickets(), refreshEvents()]);
+
+          setHasTicket(true);
+
+          window.history.replaceState({}, "", `/events/${currentEvent.id}`);
+        } catch (error) {
+          console.error("Error creating ticket:", error);
+          toast.error(
+            "Payment succeeded but ticket creation failed. Please contact support.",
+          );
+        }
+      } else if (paymentStatus === "cancelled") {
+        toast.error("Payment cancelled");
+        if (currentEvent) {
+          window.history.replaceState({}, "", `/events/${currentEvent.id}`);
+        }
+      }
+    };
+
+    handleStripeReturn();
+  }, [currentEvent, refreshUserTickets, refreshEvents]);
+
   // Early return AFTER all hooks
   if (!currentEvent) {
     return (
@@ -207,7 +246,6 @@ export function EventDetailRoute() {
   const handlePurchase = async () => {
     if (!user || !currentEvent) return;
 
-    // Double-check ticket status before purchase
     if (hasTicket) {
       toast.error("You already have a ticket for this event");
       return;
@@ -217,74 +255,20 @@ export function EventDetailRoute() {
 
     try {
       console.log("🎫 Starting ticket purchase...");
+      console.log("💳 Using Stripe Checkout...");
 
-      // Check if Stripe key exists to determine if we should use real Stripe
-      if (env.stripe.publishableKey) {
-        // Real Stripe payment flow
-        console.log("💳 Using real Stripe checkout...");
+      const { createCheckoutSession } = await import("@/lib/stripe/client");
 
-        // Create payment intent
-        const paymentData = await createPaymentIntent({
-          eventId: currentEvent.id,
-          amount: Math.round(currentEvent.price * 100), // Convert to cents
-        });
+      const { checkoutUrl } = await createCheckoutSession({
+        eventId: currentEvent.id,
+        amount: Math.round(currentEvent.price * 100),
+      });
 
-        console.log("✅ Payment intent created:", paymentData.paymentIntentId);
+      console.log("✅ Redirecting to Stripe Checkout...");
 
-        // Create ticket immediately (will be marked as 'pending' until payment completes)
-        await purchaseTicketWithStripe(
-          currentEvent.id,
-          Math.round(currentEvent.price * 100),
-          paymentData.paymentIntentId,
-        );
-
-        console.log("✅ Ticket created with pending payment");
-        toast.success("Ticket purchased successfully!");
-      } else {
-        // Demo mode - no real payment
-        await purchaseTicketDemo(currentEvent.id, currentEvent.price);
-        toast.success("Ticket purchased successfully!");
-      }
-
-      console.log("✅ Ticket created, refreshing data...");
-
-      // Refresh user tickets and events to get updated attendee count
-      await Promise.all([
-        refreshUserTickets().catch((err) => {
-          console.error("❌ Error refreshing tickets:", err);
-          // Don't throw - allow the process to continue
-        }),
-        refreshEvents().catch((err) => {
-          console.error("❌ Error refreshing events:", err);
-          // Don't throw - allow the process to continue
-        }),
-      ]);
-
-      console.log("✅ Data refreshed successfully");
-
-      // Update local hasTicket state
-      setHasTicket(true);
-
-      // Check if event has started before allowing redirect
-      const eventDate = new Date(currentEvent.date);
-      const now = new Date();
-      const eventHasStarted = now >= eventDate;
-
-      if (eventHasStarted) {
-        // Event has started - allow joining immediately
-        setTimeout(() => {
-          navigate(`/room/${currentEvent.id}`);
-        }, 500);
-      } else {
-        // Event hasn't started - just show success message
-        toast.info(
-          "Event starts " +
-            format(eventDate, "PPpp") +
-            ". You can join from the events page when it begins.",
-        );
-      }
+      // Redirect to Stripe's checkout page
+      window.location.href = checkoutUrl;
     } catch (error: unknown) {
-      // Ignore AbortError (happens when component unmounts during request)
       if (error instanceof Error && error.name === "AbortError") {
         console.log("Request aborted (component unmounted)");
         return;
@@ -296,7 +280,6 @@ export function EventDetailRoute() {
           : "Failed to purchase ticket. Please try again.";
       console.error("Purchase error:", error);
       toast.error(errorMessage);
-    } finally {
       setIsPurchasing(false);
     }
   };
