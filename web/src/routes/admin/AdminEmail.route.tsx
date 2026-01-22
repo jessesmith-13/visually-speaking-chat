@@ -1,15 +1,15 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
-import { email, adminOperations } from '@/lib/edge/client';
-import { useApp } from '@/app/hooks';
-import { Button } from '@/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/ui/card';
-import { Input } from '@/ui/input';
-import { Textarea } from '@/ui/textarea';
-import { Checkbox } from '@/ui/checkbox';
-import { Badge } from '@/ui/badge';
-import { ArrowLeft, Mail, CheckCircle, Send } from 'lucide-react';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { email, adminOperations } from "@/lib/edge/client";
+import { useApp } from "@/app/hooks";
+import { Button } from "@/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
+import { Input } from "@/ui/input";
+import { Textarea } from "@/ui/textarea";
+import { Checkbox } from "@/ui/checkbox";
+import { Badge } from "@/ui/badge";
+import { ArrowLeft, Mail, CheckCircle, Send } from "lucide-react";
 
 interface UserProfile {
   id: string;
@@ -24,44 +24,47 @@ export function AdminEmailRoute() {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-  const [subject, setSubject] = useState('');
-  const [message, setMessage] = useState('');
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
-    
+
     const loadUsers = async () => {
       if (!isMounted) return;
-      
+
       setLoading(true);
-      console.log('🔄 [EMAIL PAGE] Starting to fetch users...');
-      
+      console.log("🔄 [EMAIL PAGE] Starting to fetch users...");
+
       try {
-        console.log('🔄 [EMAIL PAGE] Calling adminOperations.getAllUsers()...');
-        
+        console.log("🔄 [EMAIL PAGE] Calling adminOperations.getAllUsers()...");
+
         const data = await adminOperations.getAllUsers();
-        
+
         if (!isMounted) return;
 
-        console.log(`✅ [EMAIL PAGE] Successfully fetched ${data?.length || 0} users`);
-        
+        console.log(
+          `✅ [EMAIL PAGE] Successfully fetched ${data?.length || 0} users`,
+        );
+
         setUsers(data || []);
         setLoading(false);
       } catch (error: unknown) {
         if (!isMounted) return;
-        
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error('❌ [EMAIL PAGE] Error in loadUsers:', error);
-        
+
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        console.error("❌ [EMAIL PAGE] Error in loadUsers:", error);
+
         toast.error(`Failed to load users: ${errorMessage}`);
         setUsers([]);
         setLoading(false);
       }
     };
-    
+
     loadUsers();
-    
+
     return () => {
       isMounted = false;
     };
@@ -81,23 +84,23 @@ export function AdminEmailRoute() {
     if (selectedUsers.size === users.length) {
       setSelectedUsers(new Set());
     } else {
-      setSelectedUsers(new Set(users.map(u => u.id)));
+      setSelectedUsers(new Set(users.map((u) => u.id)));
     }
   };
 
   const handleSendEmails = async () => {
     if (selectedUsers.size === 0) {
-      toast.error('Please select at least one recipient');
+      toast.error("Please select at least one recipient");
       return;
     }
 
     if (!subject.trim()) {
-      toast.error('Please enter an email subject');
+      toast.error("Please enter an email subject");
       return;
     }
 
     if (!message.trim()) {
-      toast.error('Please enter an email message');
+      toast.error("Please enter an email message");
       return;
     }
 
@@ -105,46 +108,98 @@ export function AdminEmailRoute() {
       setSending(true);
 
       const selectedEmails = users
-        .filter(u => selectedUsers.has(u.id))
-        .map(u => u.email);
+        .filter((u) => selectedUsers.has(u.id))
+        .map((u) => u.email);
 
-      console.log(`📧 Sending emails to ${selectedEmails.length} recipients...`);
-      console.log('Subject:', subject);
-      console.log('Recipients:', selectedEmails);
+      console.log(
+        `📧 Sending emails to ${selectedEmails.length} recipients...`,
+      );
+      console.log("Subject:", subject);
+      console.log("Recipients:", selectedEmails);
 
       // Call the Edge Function to send emails
       const result = await email.sendEmail(selectedEmails, subject, message);
-      
-      console.log(`✅ Successfully sent ${result.emailsSent} emails`);
-      
-      toast.success(
-        `✅ Successfully sent email to ${result.emailsSent} recipient(s)!`,
-        { duration: 5000 }
-      );
-      
-      // Clear form
-      setSubject('');
-      setMessage('');
+
+      console.log("Email send result:", result);
+
+      // Handle different result scenarios
+      if ("failed" in result && result.failed && result.failed > 0) {
+        // Partial or complete failure (207 status)
+        const totalAttempted = selectedEmails.length;
+        const successful = result.emailsSent || 0;
+        const failed = result.failed || 0;
+
+        if (successful === 0) {
+          // ALL emails failed
+          console.error("❌ All emails failed:", result.errors);
+
+          // Show first error message if available
+          const firstError =
+            result.errors && result.errors.length > 0
+              ? result.errors[0]
+              : "Unknown error";
+
+          toast.error(`❌ Failed to send any emails. ${firstError}`, {
+            duration: 8000,
+          });
+          return; // Don't clear form on complete failure
+        } else {
+          // SOME emails succeeded, SOME failed
+          console.warn(
+            `⚠️ Partial success: ${successful}/${totalAttempted} sent`,
+          );
+
+          toast.error(
+            `⚠️ Sent ${successful} of ${totalAttempted} emails. ${failed} failed.`,
+            { duration: 6000 },
+          );
+
+          // Log errors for debugging
+          if (result.errors) {
+            console.error("Failed email details:", result.errors);
+          }
+        }
+      } else {
+        // Complete success (200 status)
+        console.log(`✅ Successfully sent ${result.emailsSent} emails`);
+
+        toast.success(
+          `✅ Successfully sent email to ${result.emailsSent} recipient(s)!`,
+          { duration: 5000 },
+        );
+      }
+
+      // Clear form only if at least some emails succeeded
+      setSubject("");
+      setMessage("");
       setSelectedUsers(new Set());
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      const errorName = error instanceof Error ? error.name : '';
-      
-      if (errorMessage.includes('AbortError') || errorMessage.includes('aborted') || errorName === 'AbortError') {
-        console.log('⚠️ Send emails aborted (component unmounted)');
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      const errorName = error instanceof Error ? error.name : "";
+
+      if (
+        errorMessage.includes("AbortError") ||
+        errorMessage.includes("aborted") ||
+        errorName === "AbortError"
+      ) {
+        console.log("⚠️ Send emails aborted (component unmounted)");
         return;
       }
-      
-      console.error('❌ Error sending emails:', error);
-      
+
+      console.error("❌ Error sending emails:", error);
+
       // Check if it's a configuration error
-      if (errorMessage.includes('not configured') || errorMessage.includes('RESEND_API_KEY')) {
+      if (
+        errorMessage.includes("not configured") ||
+        errorMessage.includes("RESEND_API_KEY")
+      ) {
         toast.error(
-          '⚠️ Email service not configured. Please deploy the send-email Edge Function and add your RESEND_API_KEY to Supabase secrets.',
-          { duration: 8000 }
+          "⚠️ Email service not configured. Please deploy the send-email Edge Function and add your RESEND_API_KEY to Supabase secrets.",
+          { duration: 8000 },
         );
       } else {
-        toast.error(errorMessage || 'Failed to send emails');
+        toast.error(errorMessage || "Failed to send emails");
       }
     } finally {
       setSending(false);
@@ -159,7 +214,7 @@ export function AdminEmailRoute() {
             <p className="text-center text-gray-600 mb-4">
               Admin access required
             </p>
-            <Button onClick={() => navigate('/events')} className="w-full">
+            <Button onClick={() => navigate("/events")} className="w-full">
               Go to Events
             </Button>
           </CardContent>
@@ -175,7 +230,7 @@ export function AdminEmailRoute() {
         <div className="mb-8">
           <Button
             variant="ghost"
-            onClick={() => navigate('/events')}
+            onClick={() => navigate("/events")}
             className="mb-4"
           >
             <ArrowLeft className="size-4 mr-2" />
@@ -183,7 +238,9 @@ export function AdminEmailRoute() {
           </Button>
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-gray-900 dark:text-white">Email Users</h1>
+              <h1 className="text-4xl font-bold text-gray-900 dark:text-white">
+                Email Users
+              </h1>
               <p className="text-gray-600 dark:text-gray-400 mt-2">
                 Send emails to your registered users
               </p>
@@ -201,18 +258,18 @@ export function AdminEmailRoute() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <CardTitle>Select Recipients</CardTitle>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={toggleAll}
-                >
-                  {selectedUsers.size === users.length ? 'Deselect All' : 'Select All'}
+                <Button variant="outline" size="sm" onClick={toggleAll}>
+                  {selectedUsers.size === users.length
+                    ? "Deselect All"
+                    : "Select All"}
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
               {loading ? (
-                <p className="text-gray-500 text-center py-4">Loading users...</p>
+                <p className="text-gray-500 text-center py-4">
+                  Loading users...
+                </p>
               ) : users.length === 0 ? (
                 <p className="text-gray-500 text-center py-4">No users found</p>
               ) : (
@@ -229,7 +286,7 @@ export function AdminEmailRoute() {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">
-                          {userProfile.full_name || 'No Name'}
+                          {userProfile.full_name || "No Name"}
                         </p>
                         <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
                           {userProfile.email}
@@ -279,25 +336,33 @@ export function AdminEmailRoute() {
               <div className="pt-4 border-t">
                 <Button
                   onClick={handleSendEmails}
-                  disabled={sending || selectedUsers.size === 0 || !subject.trim() || !message.trim()}
+                  disabled={
+                    sending ||
+                    selectedUsers.size === 0 ||
+                    !subject.trim() ||
+                    !message.trim()
+                  }
                   className="w-full"
                   size="lg"
                 >
                   <Send className="size-4 mr-2" />
-                  {sending ? 'Sending...' : `Send to ${selectedUsers.size} User(s)`}
+                  {sending
+                    ? "Sending..."
+                    : `Send to ${selectedUsers.size} User(s)`}
                 </Button>
               </div>
 
               {selectedUsers.size > 0 && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                   <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Recipients:</strong>{' '}
+                    <strong>Recipients:</strong>{" "}
                     {users
-                      .filter(u => selectedUsers.has(u.id))
-                      .map(u => u.email)
+                      .filter((u) => selectedUsers.has(u.id))
+                      .map((u) => u.email)
                       .slice(0, 3)
-                      .join(', ')}
-                    {selectedUsers.size > 3 && ` +${selectedUsers.size - 3} more`}
+                      .join(", ")}
+                    {selectedUsers.size > 3 &&
+                      ` +${selectedUsers.size - 3} more`}
                   </p>
                 </div>
               )}

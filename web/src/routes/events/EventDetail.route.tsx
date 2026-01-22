@@ -27,6 +27,16 @@ import {
 } from "lucide-react";
 import { Badge } from "@/ui/badge";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/ui/alert-dialog";
 import { EditEventDialog } from "./components/EditEventDialog";
 import { purchaseTicketWithStripe } from "@/lib/stripe/client";
 
@@ -63,6 +73,9 @@ export function EventDetailRoute() {
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [hasTicket, setHasTicket] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
+  const [isRefunding, setIsRefunding] = useState(false);
+  const [userTicketId, setUserTicketId] = useState<string | null>(null);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [eventUpdates, setEventUpdates] = useState<EventUpdate[]>([]);
   const [updateTitle, setUpdateTitle] = useState("");
   const [updateMessage, setUpdateMessage] = useState("");
@@ -103,6 +116,7 @@ export function EventDetailRoute() {
     async function checkTicketStatus() {
       if (!currentEvent || !user) {
         setHasTicket(false);
+        setUserTicketId(null);
         return;
       }
 
@@ -112,9 +126,14 @@ export function EventDetailRoute() {
 
         // Use Edge Function to get all tickets and check if we have one for this event
         const myTickets = await tickets.getMyTickets();
-        const dbHasTicket = myTickets.some(
-          (ticket) => ticket.event_id === currentEvent.id,
+        const userTicket = myTickets.find(
+          (ticket) =>
+            ticket.event_id === currentEvent.id && ticket.status === "active",
         );
+        const dbHasTicket = !!userTicket;
+
+        // Store the ticket ID for refund purposes
+        setUserTicketId(userTicket?.id || null);
 
         // If database says we have a ticket but local state doesn't, refresh tickets
         if (dbHasTicket && !localHasTicket) {
@@ -129,6 +148,7 @@ export function EventDetailRoute() {
         console.error("Error checking ticket status:", error);
         // Fallback to local state
         setHasTicket(user.purchasedTickets.includes(currentEvent.id));
+        setUserTicketId(null);
       }
     }
 
@@ -381,6 +401,51 @@ export function EventDetailRoute() {
     }
   };
 
+  const handleCancelTicket = async () => {
+    if (!userTicketId || !currentEvent) return;
+
+    setShowCancelDialog(false);
+    setIsRefunding(true);
+
+    try {
+      console.log("🎫 Cancelling ticket...");
+
+      const result = await tickets.cancelTicket(userTicketId);
+
+      console.log("✅ Ticket cancelled successfully");
+
+      if (result.refunded) {
+        toast.success(
+          `Ticket cancelled and refund of $${currentEvent.price} processed!`,
+          { duration: 6000 },
+        );
+      } else {
+        toast.success("Ticket cancelled successfully!");
+      }
+
+      // Update local state FIRST (for immediate UI update)
+      setHasTicket(false);
+      setUserTicketId(null);
+
+      // Then refresh from backend (to sync everything)
+      await Promise.all([refreshUserTickets(), refreshEvents()]);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Request aborted (component unmounted)");
+        return;
+      }
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Failed to cancel ticket. Please try again.";
+      console.error("Cancel ticket error:", error);
+      toast.error(errorMessage);
+    } finally {
+      setIsRefunding(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container mx-auto px-4 py-8">
@@ -617,6 +682,17 @@ export function EventDetailRoute() {
                         Edit Event
                       </Button>
                     )}
+                    {userTicketId && (
+                      <Button
+                        className="w-full mt-2"
+                        variant="outline"
+                        onClick={() => setShowCancelDialog(true)}
+                        disabled={isRefunding}
+                      >
+                        <Trash2 className="size-4 mr-2" />
+                        {isRefunding ? "Refunding..." : "Cancel Ticket"}
+                      </Button>
+                    )}
                   </>
                 ) : (
                   <>
@@ -830,6 +906,29 @@ export function EventDetailRoute() {
         onOpenChange={setIsEditDialogOpen}
         onEventUpdated={refreshEvents}
       />
+
+      {/* Cancel Ticket Dialog */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Ticket</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel your ticket for "
+              {currentEvent.name}"?
+              {currentEvent.price > 0 ? "You will receive a full refund." : ""}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelTicket}
+              disabled={isRefunding}
+            >
+              {isRefunding ? "Refunding..." : "Cancel Ticket"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

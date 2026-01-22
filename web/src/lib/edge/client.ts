@@ -479,15 +479,21 @@ export const email = {
     to: string | string[],
     subject: string,
     message: string,
-  ): Promise<{ emailsSent: number }> {
-    const result = await callEdgeFunction<{ emailsSent: number }>(
-      "send-email",
-      "",
-      {
-        method: "POST",
-        body: { to, subject, message },
-      },
-    );
+  ): Promise<{
+    emailsSent: number;
+    failed?: number;
+    errors?: string[];
+    message?: string;
+  }> {
+    const result = await callEdgeFunction<{
+      emailsSent: number;
+      failed?: number;
+      errors?: string[];
+      message?: string;
+    }>("send-email", "", {
+      method: "POST",
+      body: { to, subject, message },
+    });
     return result;
   },
 };

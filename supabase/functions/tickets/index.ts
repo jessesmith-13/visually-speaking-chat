@@ -234,6 +234,7 @@ Deno.serve(async (req) => {
           }
 
           // Verify payment with Stripe (if not demo mode)
+          let actualPaymentIntentId = paymentIntentId; // Will be updated if we get a session ID
           if (!isDemoMode && paymentIntentId && stripe) {
             try {
               // If it's a checkout session (starts with cs_), verify the session
@@ -263,12 +264,22 @@ Deno.serve(async (req) => {
                   return badRequest("Payment amount mismatch", corsHeaders);
                 }
 
+                // Extract the actual payment intent ID from the session
+                actualPaymentIntentId =
+                  typeof session.payment_intent === "string"
+                    ? session.payment_intent
+                    : session.payment_intent?.id || paymentIntentId;
+
                 console.log(
                   "✅ Checkout session verified:",
                   paymentIntentId,
                   "- Paid:",
                   paidAmountInCents,
                   "cents",
+                );
+                console.log(
+                  "📌 Extracted Payment Intent ID:",
+                  actualPaymentIntentId,
                 );
               } else {
                 // It's a payment intent
@@ -357,7 +368,8 @@ Deno.serve(async (req) => {
               user_id: userId,
               event_id: eventId,
               payment_amount: amount / 100, // Convert cents to dollars
-              stripe_payment_intent_id: paymentIntentId || `demo_${Date.now()}`,
+              stripe_payment_intent_id:
+                actualPaymentIntentId || `demo_${Date.now()}`,
               status: "active",
             })
             .select()
@@ -389,7 +401,8 @@ Deno.serve(async (req) => {
             await supabaseAdmin.from("stripe_payments").insert({
               user_id: userId,
               event_id: eventId,
-              stripe_payment_intent_id: paymentIntentId || `demo_${Date.now()}`,
+              stripe_payment_intent_id:
+                actualPaymentIntentId || `demo_${Date.now()}`,
               amount,
               currency: "usd",
               status: "succeeded",
@@ -452,6 +465,7 @@ Deno.serve(async (req) => {
           const eventDate = new Date(eventData.date);
           const isPastEvent = eventDate < new Date();
 
+          // Attempt refund if applicable
           if (
             !isPastEvent &&
             ticket.stripe_payment_intent_id &&
@@ -459,21 +473,69 @@ Deno.serve(async (req) => {
             stripe
           ) {
             try {
+              console.log(
+                "💳 Attempting refund for payment intent:",
+                ticket.stripe_payment_intent_id,
+              );
+
+              // ✅ FIX: Handle both Checkout Session IDs and Payment Intent IDs
+              let paymentIntentId = ticket.stripe_payment_intent_id;
+
+              // If it's a Checkout Session ID, retrieve the Payment Intent
+              if (paymentIntentId.startsWith("cs_")) {
+                console.log(
+                  "🔄 Converting Checkout Session to Payment Intent...",
+                );
+                const session =
+                  await stripe.checkout.sessions.retrieve(paymentIntentId);
+
+                if (!session.payment_intent) {
+                  console.error(
+                    "❌ No payment intent found in Checkout Session",
+                  );
+                  return serverError(
+                    new Error("Cannot refund: No payment intent found"),
+                    corsHeaders,
+                  );
+                }
+
+                paymentIntentId =
+                  typeof session.payment_intent === "string"
+                    ? session.payment_intent
+                    : session.payment_intent.id;
+
+                console.log("✅ Retrieved Payment Intent ID:", paymentIntentId);
+              }
+
               const refund = await stripe.refunds.create({
-                payment_intent: ticket.stripe_payment_intent_id,
+                payment_intent: paymentIntentId,
               });
 
               if (refund.status === "succeeded") {
                 refunded = true;
                 console.log("✅ Refund processed:", refund.id);
+              } else {
+                console.error("❌ Refund failed with status:", refund.status);
+                return serverError(
+                  new Error(`Refund failed with status: ${refund.status}`),
+                  corsHeaders,
+                );
               }
             } catch (error: unknown) {
               console.error("❌ Refund error:", error);
-              // Continue with cancellation
+              // Don't continue with cancellation - return error to frontend
+              const errorMessage =
+                error instanceof Error
+                  ? error.message
+                  : "Failed to process refund";
+              return serverError(
+                new Error(`Refund failed: ${errorMessage}`),
+                corsHeaders,
+              );
             }
           }
 
-          // Cancel the ticket
+          // Only cancel the ticket if refund succeeded or wasn't needed
           const { error: cancelError } = await supabaseAdmin
             .from("tickets")
             .update({ status: "cancelled" })
