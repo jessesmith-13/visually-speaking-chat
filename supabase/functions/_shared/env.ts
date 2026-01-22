@@ -36,7 +36,7 @@ export const ENVIRONMENT = Deno.env.get("ENVIRONMENT") || "development";
  */
 export function getFromEmail(): string {
   if (ENVIRONMENT === "production") {
-    return "Visually Speaking <noreply@visuallyspeaking.app>";
+    return "Visually Speaking <kellie@visuallyspeaking.info>";
   }
   // Development & Test - use Resend's onboarding email
   return "Visually Speaking <onboarding@resend.dev>";

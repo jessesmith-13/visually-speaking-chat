@@ -1,30 +1,30 @@
-import { Video, Users, Shield, Zap } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/ui/button';
-import { Card, CardContent } from '@/ui/card';
-import { testSupabaseConnection } from '@/lib/supabase/test';
-import { toast } from 'sonner';
+import { Video, Users, Shield, Zap } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Button } from "@/ui/button";
+import { Card, CardContent } from "@/ui/card";
+import { testSupabaseConnection } from "@/lib/supabase/test";
+import { toast } from "sonner";
 
 export function LandingRoute() {
   const navigate = useNavigate();
-  
+
   const handleTestConnection = async () => {
-    toast.loading('Testing Supabase connection...');
+    toast.loading("Testing Supabase connection...");
     const result = await testSupabaseConnection();
-    
+
     if (result.success) {
       if (result.warning) {
         toast.warning(result.warning, {
-          description: result.details
+          description: result.details,
         });
       } else {
         toast.success(result.message, {
-          description: `Table exists: ${result.tableExists}, Authenticated: ${result.authenticated}`
+          description: `Table exists: ${result.tableExists}, Authenticated: ${result.authenticated}`,
         });
       }
     } else {
       toast.error(result.error, {
-        description: result.details
+        description: result.details,
       });
     }
   };
@@ -35,22 +35,26 @@ export function LandingRoute() {
       <section className="bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-950 py-20">
         <div className="container mx-auto px-4 text-center">
           <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-4">
-            Connect Through Video, Communicate Through Sign
+            Live Video Matchups: Your Next Signing Friend Awaits!
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-400 mb-8">
-            Visually Speaking brings together deaf and hard of hearing individuals through
-            video-based events. Meet new friends, practice sign language, and build
-            meaningful connections.
+            Meet random people through live video matchups in a fun,
+            low-pressure space. Chat, sign in ASL, and connect with people from
+            all over — enjoy spontaneous conversations, and have fun. 🤟✨
           </p>
           <div className="flex gap-4 justify-center">
-            <Button size="lg" onClick={() => navigate('/events')}>
+            <Button size="lg" onClick={() => navigate("/events")}>
               Browse Events
             </Button>
-            <Button size="lg" variant="outline" onClick={() => navigate('/auth')}>
+            <Button
+              size="lg"
+              variant="outline"
+              onClick={() => navigate("/auth")}
+            >
               Get Started
             </Button>
           </div>
-          
+
           {/* Developer Tools */}
           <div className="mt-8">
             <Button size="sm" variant="ghost" onClick={handleTestConnection}>
@@ -74,7 +78,8 @@ export function LandingRoute() {
                 </div>
                 <h3 className="font-semibold">Video-Only</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Crystal clear video streaming optimized for sign language communication
+                  Crystal clear video streaming optimized for sign language
+                  communication
                 </p>
               </div>
             </CardContent>
@@ -88,7 +93,8 @@ export function LandingRoute() {
                 </div>
                 <h3 className="font-semibold">Random Matching</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Meet new people at every event through our smart pairing system
+                  Meet new people at every event through our smart pairing
+                  system
                 </p>
               </div>
             </CardContent>
@@ -102,7 +108,8 @@ export function LandingRoute() {
                 </div>
                 <h3 className="font-semibold">Safe & Secure</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Ticketed events ensure a safe, moderated environment for everyone
+                  Ticketed events ensure a safe, moderated environment for
+                  everyone
                 </p>
               </div>
             </CardContent>
@@ -116,7 +123,8 @@ export function LandingRoute() {
                 </div>
                 <h3 className="font-semibold">Easy to Use</h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  Purchase a ticket, join the event, and start connecting instantly
+                  Purchase a ticket, join the event, and start connecting
+                  instantly
                 </p>
               </div>
             </CardContent>
@@ -134,7 +142,9 @@ export function LandingRoute() {
             <div className="w-12 h-12 bg-blue-600 dark:bg-blue-500 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
               1
             </div>
-            <h3 className="font-semibold mb-2 dark:text-white">Choose an Event</h3>
+            <h3 className="font-semibold mb-2 dark:text-white">
+              Choose an Event
+            </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Browse our upcoming events and select one that fits your schedule
             </p>
@@ -143,7 +153,9 @@ export function LandingRoute() {
             <div className="w-12 h-12 bg-blue-600 dark:bg-blue-500 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
               2
             </div>
-            <h3 className="font-semibold mb-2 dark:text-white">Purchase a Ticket</h3>
+            <h3 className="font-semibold mb-2 dark:text-white">
+              Purchase a Ticket
+            </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Secure your spot with a simple one-time payment
             </p>
@@ -152,7 +164,9 @@ export function LandingRoute() {
             <div className="w-12 h-12 bg-blue-600 dark:bg-blue-500 text-white rounded-full flex items-center justify-center text-xl font-bold mx-auto mb-4">
               3
             </div>
-            <h3 className="font-semibold mb-2 dark:text-white">Start Connecting</h3>
+            <h3 className="font-semibold mb-2 dark:text-white">
+              Start Connecting
+            </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
               Join the event and get randomly paired with others to chat
             </p>
@@ -169,7 +183,7 @@ export function LandingRoute() {
           <p className="text-lg text-gray-600 dark:text-gray-400 mb-8">
             Join our growing community and make meaningful connections today
           </p>
-          <Button size="lg" onClick={() => navigate('/events')}>
+          <Button size="lg" onClick={() => navigate("/events")}>
             View Upcoming Events
           </Button>
         </div>
