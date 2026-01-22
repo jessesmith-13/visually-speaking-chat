@@ -1,12 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import Stripe from "https://esm.sh/stripe@14.11.0?target=deno";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { handleCors } from "../_shared/cors.ts";
 
 interface CreatePaymentIntentRequest {
   eventId: string;
@@ -14,10 +9,9 @@ interface CreatePaymentIntentRequest {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
+  // Handle CORS using shared handler
+  const { earlyResponse, headers: corsHeaders } = handleCors(req);
+  if (earlyResponse) return earlyResponse;
 
   try {
     // Get the Stripe secret key from environment
@@ -54,6 +48,7 @@ serve(async (req) => {
     } = await supabase.auth.getUser();
 
     if (userError || !user) {
+      console.error("Auth error:", userError);
       throw new Error("Unauthorized");
     }
 
@@ -72,7 +67,7 @@ serve(async (req) => {
     // Get event details to verify it exists
     const { data: event, error: eventError } = await supabase
       .from("events")
-      .select("id, name, price") // ✅ Changed from 'title' to 'name'
+      .select("id, name, price")
       .eq("id", eventId)
       .single();
 
@@ -108,7 +103,7 @@ serve(async (req) => {
       metadata: {
         eventId,
         userId: user.id,
-        eventName: event.name, // ✅ Changed from eventTitle to eventName
+        eventName: event.name,
       },
       automatic_payment_methods: {
         enabled: true,
