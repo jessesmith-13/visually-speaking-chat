@@ -39,6 +39,7 @@ export function EventDetailRoute() {
     useApp();
   const currentEvent = events.find((e) => e.id === eventId);
 
+  // Use centralized hooks
   const { isEventLive, isEventPast, isEventUpcoming } =
     useEventStatus(currentEvent);
   const {
@@ -55,6 +56,7 @@ export function EventDetailRoute() {
     user?.isAdmin,
   );
 
+  // Handle Stripe return
   useStripeReturn(
     currentEvent,
     refreshUserTickets,
@@ -62,6 +64,7 @@ export function EventDetailRoute() {
     setHasTicket,
   );
 
+  // Local state for component-specific functionality
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -70,8 +73,10 @@ export function EventDetailRoute() {
   const [updateMessage, setUpdateMessage] = useState("");
   const [isPostingUpdate, setIsPostingUpdate] = useState(false);
 
+  // Edit event state
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  // Early return AFTER all hooks
   if (!currentEvent) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">

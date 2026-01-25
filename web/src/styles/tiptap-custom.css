@@ -1,0 +1,247 @@
+/* Custom styles for Tiptap editor */
+
+/* Editor content area */
+.tiptap-editor.ProseMirror,
+.ProseMirror {
+  outline: none;
+  color: hsl(var(--foreground));
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: hsl(var(--muted-foreground));
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+/* Paragraphs */
+.ProseMirror > p {
+  margin: 0.5rem 0;
+}
+
+/* Headings */
+.ProseMirror h1 {
+  font-size: 2em;
+  font-weight: bold;
+  margin: 0.67em 0;
+  line-height: 1.2;
+}
+
+.ProseMirror h2 {
+  font-size: 1.5em;
+  font-weight: bold;
+  margin: 0.75em 0;
+  line-height: 1.3;
+}
+
+.ProseMirror h3 {
+  font-size: 1.17em;
+  font-weight: bold;
+  margin: 0.83em 0;
+  line-height: 1.4;
+}
+
+/* Lists - ULTRA AGGRESSIVE FORCING */
+div.ProseMirror ul,
+div.ProseMirror ol {
+  padding-left: 2rem !important;
+  margin: 1rem 0 !important;
+}
+
+div.ProseMirror ul {
+  list-style-type: disc !important;
+  list-style-position: outside !important;
+}
+
+div.ProseMirror ol {
+  list-style-type: decimal !important;
+  list-style-position: outside !important;
+}
+
+div.ProseMirror ul > li,
+div.ProseMirror ol > li {
+  display: list-item !important;
+  list-style-position: outside !important;
+  margin-left: 0 !important;
+}
+
+div.ProseMirror ul > li {
+  list-style-type: disc !important;
+}
+
+div.ProseMirror ol > li {
+  list-style-type: decimal !important;
+}
+
+/* Nested lists */
+div.ProseMirror ul ul {
+  list-style-type: circle !important;
+  margin: 0.25rem 0 !important;
+}
+
+div.ProseMirror ul ul ul {
+  list-style-type: square !important;
+}
+
+/* List items with paragraphs */
+div.ProseMirror li > p {
+  margin: 0 !important;
+  display: inline !important;
+}
+
+div.ProseMirror li > p:first-child {
+  display: inline !important;
+}
+
+/* Bold, italic, strikethrough */
+.ProseMirror strong {
+  font-weight: bold;
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror s {
+  text-decoration: line-through;
+}
+
+/* Code blocks */
+.ProseMirror pre {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  font-family: monospace;
+  padding: 0.75rem 1rem;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.ProseMirror code {
+  background: hsl(var(--muted));
+  color: hsl(var(--foreground));
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-family: monospace;
+  font-size: 0.9em;
+}
+
+.ProseMirror pre code {
+  background: none;
+  padding: 0;
+}
+
+/* Blockquote */
+.ProseMirror blockquote {
+  border-left: 3px solid hsl(var(--border));
+  padding-left: 1rem;
+  margin: 1rem 0;
+  font-style: italic;
+  color: hsl(var(--muted-foreground));
+}
+
+/* Horizontal rule */
+.ProseMirror hr {
+  border: none;
+  border-top: 2px solid hsl(var(--border));
+  margin: 2rem 0;
+}
+
+/* Selection */
+.ProseMirror ::selection {
+  background: hsl(var(--primary) / 0.3);
+}
+
+/* Focus */
+.ProseMirror:focus {
+  outline: none;
+}
+
+/* Scrollbar styling */
+.ProseMirror::-webkit-scrollbar {
+  width: 8px;
+}
+
+.ProseMirror::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ProseMirror::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.3);
+  border-radius: 4px;
+}
+
+.ProseMirror::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Dark mode adjustments */
+.dark .ProseMirror {
+  color: hsl(var(--foreground));
+}
+
+/* Styles for rendered Tiptap content (outside the editor) */
+.prose ul,
+.prose ol {
+  padding-left: 2rem !important;
+  margin: 1rem 0 !important;
+}
+
+.prose ul {
+  list-style-type: disc !important;
+  list-style-position: outside !important;
+}
+
+.prose ol {
+  list-style-type: decimal !important;
+  list-style-position: outside !important;
+}
+
+.prose ul > li,
+.prose ol > li {
+  display: list-item !important;
+  list-style-position: outside !important;
+  margin-left: 0 !important;
+}
+
+.prose ul > li {
+  list-style-type: disc !important;
+}
+
+.prose ol > li {
+  list-style-type: decimal !important;
+}
+
+/* Nested lists in rendered content */
+.prose ul ul {
+  list-style-type: circle !important;
+  margin: 0.25rem 0 !important;
+}
+
+.prose ul ul ul {
+  list-style-type: square !important;
+}
+
+/* List items with paragraphs in rendered content */
+.prose li > p {
+  margin: 0 !important;
+  display: inline !important;
+}
+
+.prose li > p:first-child {
+  display: inline !important;
+}
+
+/* Text formatting in rendered content */
+.prose strong {
+  font-weight: bold;
+}
+
+.prose em {
+  font-style: italic;
+}
+
+.prose s {
+  text-decoration: line-through;
+}
