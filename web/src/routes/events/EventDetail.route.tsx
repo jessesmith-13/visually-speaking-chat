@@ -29,7 +29,7 @@ import { EventHeader } from "./components/EventHeader";
 import { EventDetailsCard } from "./components/EventDetailsCard";
 import { TicketPurchaseCard } from "./components/TicketPurchaseCard";
 import { EventUpdatesCard } from "./components/EventUpdatesCard";
-import { AdminUpdateForm } from "./components/AdminupdateForm";
+import { AdminUpdateForm } from "./components/AdminUpdateForm";
 import { AdminParticipantsList } from "./components/AdminParticipantsList";
 
 export function EventDetailRoute() {
