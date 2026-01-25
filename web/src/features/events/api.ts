@@ -18,6 +18,9 @@ interface DatabaseEvent {
   created_by: string;
   created_at: string;
   updated_at: string;
+  event_type?: "virtual" | "in-person";
+  venue_name?: string;
+  venue_address?: string;
 }
 
 /**
@@ -25,13 +28,36 @@ interface DatabaseEvent {
  */
 export async function fetchEvents(): Promise<Event[]> {
   try {
-    const result = await callEdgeFunction<{ events: Event[] }>("events", "/", {
-      method: "GET",
-      requireAuth: false,
-    });
+    const result = await callEdgeFunction<{ events: DatabaseEvent[] }>(
+      "events",
+      "/",
+      {
+        method: "GET",
+        requireAuth: false,
+      },
+    );
 
     console.log("✅ Events fetched via Edge Function:", result.events.length);
-    return result.events;
+
+    // Map database events to frontend Event type
+    return result.events.map((eventData) => ({
+      id: eventData.id,
+      name: eventData.name,
+      description: eventData.description,
+      date: new Date(eventData.date),
+      duration: eventData.duration,
+      price: eventData.price ?? 0,
+      capacity: eventData.capacity,
+      attendees: eventData.attendees || 0,
+      imageUrl: eventData.image_url,
+      status: eventData.status || "upcoming",
+      createdBy: eventData.created_by,
+      createdAt: new Date(eventData.created_at),
+      updatedAt: new Date(eventData.updated_at),
+      eventType: eventData.event_type || "virtual",
+      venueName: eventData.venue_name,
+      venueAddress: eventData.venue_address,
+    }));
   } catch (error: unknown) {
     // Handle abort errors gracefully
     const err = error as { message?: string; name?: string; code?: number };
@@ -79,6 +105,9 @@ export async function fetchEvent(eventId: string): Promise<Event | null> {
       createdBy: eventData.created_by,
       createdAt: new Date(eventData.created_at),
       updatedAt: new Date(eventData.updated_at),
+      eventType: eventData.event_type || "virtual",
+      venueName: eventData.venue_name,
+      venueAddress: eventData.venue_address,
     };
   } catch (error: unknown) {
     // Ignore AbortError
@@ -123,6 +152,9 @@ export async function createEvent(
           price: event.price,
           capacity: event.capacity,
           imageUrl: event.imageUrl,
+          event_type: event.eventType,
+          venue_name: event.venueName,
+          venue_address: event.venueAddress,
         },
       },
     );
@@ -144,6 +176,9 @@ export async function createEvent(
       createdBy: data.created_by,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
+      eventType: data.event_type || "virtual",
+      venueName: data.venue_name,
+      venueAddress: data.venue_address,
     };
   } catch (error: unknown) {
     const err = error as { message?: string; name?: string };
@@ -199,6 +234,9 @@ export async function updateEvent(
     price: number;
     capacity: number;
     imageUrl: string;
+    event_type: "virtual" | "in-person";
+    venue_name: string;
+    venue_address: string;
   }>,
 ): Promise<Event> {
   try {
@@ -214,6 +252,10 @@ export async function updateEvent(
     if (updates.price !== undefined) body.price = updates.price;
     if (updates.capacity !== undefined) body.capacity = updates.capacity;
     if (updates.imageUrl !== undefined) body.imageUrl = updates.imageUrl;
+    if (updates.event_type !== undefined) body.event_type = updates.event_type;
+    if (updates.venue_name !== undefined) body.venue_name = updates.venue_name;
+    if (updates.venue_address !== undefined)
+      body.venue_address = updates.venue_address;
 
     const result = await callEdgeFunction<{ event: DatabaseEvent }>(
       "admin-operations",
@@ -241,6 +283,9 @@ export async function updateEvent(
       createdBy: data.created_by,
       createdAt: new Date(data.created_at),
       updatedAt: new Date(data.updated_at),
+      eventType: data.event_type || "virtual",
+      venueName: data.venue_name,
+      venueAddress: data.venue_address,
     };
   } catch (error: unknown) {
     const err = error as { message?: string; name?: string };

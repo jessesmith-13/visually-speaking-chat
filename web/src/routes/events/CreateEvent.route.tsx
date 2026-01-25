@@ -5,7 +5,15 @@ import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
 import { Textarea } from "@/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { ArrowLeft, Calendar, Clock, DollarSign, Users } from "lucide-react";
+import {
+  ArrowLeft,
+  Calendar,
+  Clock,
+  DollarSign,
+  Users,
+  Video,
+  MapPin,
+} from "lucide-react";
 import { useApp } from "@/app/hooks";
 import { toast } from "sonner";
 
@@ -21,6 +29,9 @@ export function CreateEventRoute() {
     price: "",
     capacity: "",
     imageUrl: "",
+    eventType: "virtual" as "virtual" | "in-person",
+    venueName: "",
+    venueAddress: "",
   });
 
   const handleChange = (
@@ -59,6 +70,9 @@ export function CreateEventRoute() {
       createdBy: user?.id || "",
       createdAt: new Date(),
       updatedAt: new Date(),
+      eventType: formData.eventType,
+      venueName: formData.venueName,
+      venueAddress: formData.venueAddress,
     };
 
     try {
@@ -75,6 +89,9 @@ export function CreateEventRoute() {
         price: "",
         capacity: "",
         imageUrl: "",
+        eventType: "virtual",
+        venueName: "",
+        venueAddress: "",
       });
 
       // Navigate to events page after a short delay
@@ -246,6 +263,66 @@ export function CreateEventRoute() {
                   Enter an image URL or leave blank for a default image
                 </p>
               </div>
+
+              {/* Event Type */}
+              <div className="space-y-2">
+                <Label htmlFor="eventType">Event Type</Label>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center">
+                    <input
+                      id="virtual"
+                      type="radio"
+                      name="eventType"
+                      value="virtual"
+                      checked={formData.eventType === "virtual"}
+                      onChange={handleChange}
+                      className="mr-2"
+                    />
+                    <Video className="size-4" />
+                    Virtual
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      id="in-person"
+                      type="radio"
+                      name="eventType"
+                      value="in-person"
+                      checked={formData.eventType === "in-person"}
+                      onChange={handleChange}
+                      className="mr-2"
+                    />
+                    <MapPin className="size-4" />
+                    In-Person
+                  </div>
+                </div>
+              </div>
+
+              {/* Venue Name and Address */}
+              {formData.eventType === "in-person" && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="venueName">Venue Name</Label>
+                    <Input
+                      id="venueName"
+                      name="venueName"
+                      value={formData.venueName}
+                      onChange={handleChange}
+                      placeholder="e.g., The Grand Ballroom"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="venueAddress">Venue Address</Label>
+                    <Input
+                      id="venueAddress"
+                      name="venueAddress"
+                      value={formData.venueAddress}
+                      onChange={handleChange}
+                      placeholder="e.g., 123 Main St, Anytown, USA"
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Submit Button */}
               <div className="flex gap-4 pt-4">

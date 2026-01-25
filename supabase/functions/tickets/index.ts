@@ -8,17 +8,22 @@
  *   POST /purchase - Complete ticket purchase (uses atomic RPC)
  *   DELETE /:id/cancel - Cancel ticket with optional refund (uses atomic RPC)
  *   GET /my-tickets - Get user's tickets
+ *   POST /verify - Verify ticket check-in
  *
  * Security: Requires user authentication
  */
 
-import Stripe from "stripe";
+import Stripe from "npm:stripe";
 import { handleCors } from "../_shared/cors.ts";
 import { createAuthClient, createAdminClient } from "../_shared/supabase.ts";
 import { requireUser } from "../_shared/auth.ts";
 import { json, badRequest, notFound, serverError } from "../_shared/http.ts";
 import { validateRequired, validateUuid } from "../_shared/validate.ts";
-import { STRIPE_SECRET_KEY } from "../_shared/env.ts";
+import {
+  STRIPE_SECRET_KEY,
+  RESEND_API_KEY,
+  getFromEmail,
+} from "../_shared/env.ts";
 import { withCors } from "../_shared/response.ts";
 
 // Initialize Stripe (only if key is available)
@@ -41,6 +46,11 @@ interface PurchaseTicketBody extends Record<string, unknown> {
   amount: number;
   paymentIntentId?: string;
   isDemoMode?: boolean;
+}
+
+interface VerifyTicketBody extends Record<string, unknown> {
+  ticketId: string;
+  eventId?: string;
 }
 
 // Route handlers
@@ -118,7 +128,9 @@ Deno.serve(async (req) => {
           // Check event exists
           const { data: event, error: eventError } = await supabaseAdmin
             .from("events")
-            .select("capacity, attendees, name, price")
+            .select(
+              "capacity, attendees, name, price, date, event_type, venue_name, venue_address",
+            )
             .eq("id", eventId)
             .single();
 
@@ -347,7 +359,9 @@ Deno.serve(async (req) => {
           // Check event capacity
           const { data: event, error: eventError } = await supabaseAdmin
             .from("events")
-            .select("capacity, attendees")
+            .select(
+              "capacity, attendees, name, date, event_type, venue_name, venue_address",
+            )
             .eq("id", eventId)
             .single();
 
@@ -411,6 +425,178 @@ Deno.serve(async (req) => {
             const errorMessage =
               error instanceof Error ? error.message : "Unknown error";
             console.warn("⚠️ Could not record payment:", errorMessage);
+          }
+
+          // Send ticket email for in-person events
+          if (event.event_type === "in-person" && RESEND_API_KEY) {
+            try {
+              // Get user email
+              const { data: userData } =
+                await supabaseAdmin.auth.admin.getUserById(userId);
+
+              if (userData.user?.email) {
+                const eventDate = new Date(event.date).toLocaleString("en-US", {
+                  weekday: "long",
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                  hour: "numeric",
+                  minute: "2-digit",
+                });
+
+                // Generate QR code placeholder
+                const qrCodeSVG = `
+                  <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="200" height="200" fill="white"/>
+                    <text x="100" y="100" text-anchor="middle" font-family="monospace" font-size="12" fill="black">
+                      QR Code Placeholder
+                    </text>
+                    <text x="100" y="120" text-anchor="middle" font-family="monospace" font-size="8" fill="gray">
+                      Ticket ID:
+                    </text>
+                    <text x="100" y="135" text-anchor="middle" font-family="monospace" font-size="8" fill="gray">
+                      ${newTicket.id.slice(0, 8)}...
+                    </text>
+                  </svg>
+                `;
+
+                // Send email via Resend
+                const emailResponse = await fetch(
+                  "https://api.resend.com/emails",
+                  {
+                    method: "POST",
+                    headers: {
+                      "Content-Type": "application/json",
+                      Authorization: `Bearer ${RESEND_API_KEY}`,
+                    },
+                    body: JSON.stringify({
+                      from: getFromEmail(),
+                      to: userData.user.email,
+                      subject: `Your Ticket for ${event.name}`,
+                      html: `
+                      <!DOCTYPE html>
+                      <html>
+                        <head>
+                          <meta charset="utf-8">
+                          <style>
+                            body {
+                              font-family: Arial, sans-serif;
+                              line-height: 1.6;
+                              color: #333;
+                              max-width: 600px;
+                              margin: 0 auto;
+                              padding: 20px;
+                            }
+                            .ticket-container {
+                              border: 2px solid #4F46E5;
+                              border-radius: 12px;
+                              padding: 30px;
+                              margin: 20px 0;
+                              background: #F9FAFB;
+                            }
+                            .qr-code {
+                              text-align: center;
+                              margin: 20px 0;
+                              padding: 20px;
+                              background: white;
+                              border-radius: 8px;
+                            }
+                            .event-details {
+                              margin: 20px 0;
+                            }
+                            .detail-row {
+                              margin: 10px 0;
+                              padding: 10px;
+                              background: white;
+                              border-radius: 6px;
+                            }
+                            .label {
+                              font-weight: bold;
+                              color: #4F46E5;
+                            }
+                            .footer {
+                              margin-top: 30px;
+                              padding-top: 20px;
+                              border-top: 1px solid #ddd;
+                              font-size: 12px;
+                              color: #666;
+                            }
+                          </style>
+                        </head>
+                        <body>
+                          <h1 style="color: #4F46E5;">🎟️ Your Visually Speaking Ticket</h1>
+                          
+                          <div class="ticket-container">
+                            <h2>Event: ${event.name}</h2>
+                            
+                            <div class="qr-code">
+                              ${qrCodeSVG}
+                              <p style="margin-top: 10px; color: #666; font-size: 14px;">
+                                Present this QR code at the door
+                              </p>
+                            </div>
+                            
+                            <div class="event-details">
+                              <div class="detail-row">
+                                <span class="label">📅 Date & Time:</span><br/>
+                                ${eventDate}
+                              </div>
+                              
+                              ${
+                                event.venue_name
+                                  ? `
+                                <div class="detail-row">
+                                  <span class="label">📍 Venue:</span><br/>
+                                  ${event.venue_name}
+                                </div>
+                              `
+                                  : ""
+                              }
+                              
+                              ${
+                                event.venue_address
+                                  ? `
+                                <div class="detail-row">
+                                  <span class="label">🗺️ Address:</span><br/>
+                                  ${event.venue_address}
+                                </div>
+                              `
+                                  : ""
+                              }
+                              
+                              <div class="detail-row">
+                                <span class="label">🎫 Ticket ID:</span><br/>
+                                <code style="font-size: 11px; color: #666;">${newTicket.id}</code>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div class="footer">
+                            <p>Thank you for joining Visually Speaking!</p>
+                            <p>If you have any questions, please contact support.</p>
+                            <p style="color: #999;">This ticket is non-transferable.</p>
+                          </div>
+                        </body>
+                      </html>
+                    `,
+                    }),
+                  },
+                );
+
+                if (emailResponse.ok) {
+                  console.log("✅ Ticket email sent to:", userData.user.email);
+                } else {
+                  const errorData = await emailResponse
+                    .json()
+                    .catch(() => ({}));
+                  console.error("❌ Failed to send ticket email:", errorData);
+                }
+              }
+            } catch (error: unknown) {
+              const errorMessage =
+                error instanceof Error ? error.message : "Unknown error";
+              console.warn("⚠️ Could not send ticket email:", errorMessage);
+            }
           }
 
           return json(
@@ -564,6 +750,127 @@ Deno.serve(async (req) => {
           console.log("✅ Ticket cancelled");
 
           return json({ success: true, refunded }, 200, corsHeaders);
+        },
+      },
+      {
+        pattern: /^\/verify$/,
+        method: "POST",
+        handler: async (req, userId, _, corsHeaders) => {
+          const body: VerifyTicketBody = await req.json();
+          const requiredCheck = validateRequired(body, ["ticketId"]);
+          if (!requiredCheck.valid) {
+            return badRequest(requiredCheck.error!, corsHeaders);
+          }
+
+          const { ticketId, eventId } = body;
+
+          // Validate ticket ID
+          const ticketUuidCheck = validateUuid(ticketId);
+          if (!ticketUuidCheck.valid) {
+            return badRequest("Invalid ticket ID format", corsHeaders);
+          }
+
+          // Validate event ID if provided
+          if (eventId) {
+            const eventUuidCheck = validateUuid(eventId);
+            if (!eventUuidCheck.valid) {
+              return badRequest("Invalid event ID format", corsHeaders);
+            }
+          }
+
+          console.log(`🎟️ Verifying ticket: ${ticketId}`);
+
+          // Fetch ticket
+          const { data: ticket, error: fetchError } = await supabaseAdmin
+            .from("tickets")
+            .select(
+              "id, user_id, event_id, status, check_in_count, last_checked_in_at",
+            )
+            .eq("id", ticketId)
+            .single();
+
+          if (fetchError || !ticket) {
+            console.error("❌ Ticket not found:", fetchError);
+            return notFound("Ticket not found", corsHeaders);
+          }
+
+          // Check if ticket is active
+          if (ticket.status !== "active") {
+            console.error(`❌ Ticket status is ${ticket.status}, not active`);
+            return badRequest(
+              `Ticket is ${ticket.status} and cannot be used`,
+              corsHeaders,
+            );
+          }
+
+          // Verify event ID matches if provided
+          if (eventId && ticket.event_id !== eventId) {
+            console.error("❌ Ticket does not belong to this event");
+            return badRequest(
+              "Ticket does not belong to this event",
+              corsHeaders,
+            );
+          }
+
+          // Check if event is in-person
+          const { data: event, error: eventError } = await supabaseAdmin
+            .from("events")
+            .select("id, name, event_type")
+            .eq("id", ticket.event_id)
+            .single();
+
+          if (eventError || !event) {
+            console.error("❌ Event not found:", eventError);
+            return notFound("Event not found", corsHeaders);
+          }
+
+          if (event.event_type !== "in-person") {
+            console.error("❌ Event is not in-person");
+            return badRequest(
+              "This event is virtual and does not require check-in",
+              corsHeaders,
+            );
+          }
+
+          // Update ticket check-in
+          const now = new Date().toISOString();
+          const newCheckInCount = (ticket.check_in_count || 0) + 1;
+
+          const { data: updatedTicket, error: updateError } =
+            await supabaseAdmin
+              .from("tickets")
+              .update({
+                check_in_count: newCheckInCount,
+                last_checked_in_at: now,
+              })
+              .eq("id", ticketId)
+              .select()
+              .single();
+
+          if (updateError || !updatedTicket) {
+            console.error("❌ Error updating ticket:", updateError);
+            return serverError(
+              updateError || new Error("Failed to update ticket"),
+              corsHeaders,
+            );
+          }
+
+          console.log(
+            `✅ Ticket checked in: ${ticketId} (count: ${newCheckInCount})`,
+          );
+
+          return json(
+            {
+              success: true,
+              ticket: updatedTicket,
+              message:
+                newCheckInCount > 1
+                  ? `Ticket checked in ${newCheckInCount} times`
+                  : "Ticket checked in successfully",
+            },
+            200,
+            corsHeaders,
+          );
         },
       },
       {

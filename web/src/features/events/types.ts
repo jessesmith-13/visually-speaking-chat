@@ -9,7 +9,10 @@ export interface Event {
   attendees: number;
   imageUrl: string;
   status: "upcoming" | "active" | "ended" | "cancelled";
-  createdBy: string;
-  createdAt: Date;
-  updatedAt: Date;
+  eventType: "virtual" | "in-person"; // New field
+  venueName?: string; // Optional, for in-person events
+  venueAddress?: string; // Optional, for in-person events
+  createdBy?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
 }

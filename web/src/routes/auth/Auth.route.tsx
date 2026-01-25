@@ -279,10 +279,15 @@ export function AuthRoute() {
   const handleGoogleLogin = async () => {
     setLoading(true);
     try {
+      // Use current origin for redirect (will be localhost in dev, production URL in prod)
+      const redirectUrl = `${window.location.origin}/events`;
+      console.log("🔵 [GOOGLE LOGIN] Redirect URL:", redirectUrl);
+      console.log("🔵 [GOOGLE LOGIN] Current origin:", window.location.origin);
+
       const { error } = await signInWithGoogle({
         provider: "google",
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: redirectUrl,
         },
       });
 

@@ -23,6 +23,9 @@ interface Event {
   price: number;
   capacity: number;
   imageUrl?: string;
+  eventType?: "virtual" | "in-person";
+  venueName?: string;
+  venueAddress?: string;
 }
 
 interface EditEventDialogProps {
@@ -40,6 +43,9 @@ interface EditForm {
   price: number;
   capacity: number;
   imageUrl: string;
+  eventType: "virtual" | "in-person";
+  venueName: string;
+  venueAddress: string;
 }
 
 export function EditEventDialog({
@@ -57,6 +63,9 @@ export function EditEventDialog({
     price: 0,
     capacity: 0,
     imageUrl: "",
+    eventType: "virtual",
+    venueName: "",
+    venueAddress: "",
   });
 
   // Initialize form when dialog opens or event changes
@@ -70,6 +79,9 @@ export function EditEventDialog({
         price: event.price,
         capacity: event.capacity,
         imageUrl: event.imageUrl || "",
+        eventType: event.eventType || "virtual",
+        venueName: event.venueName || "",
+        venueAddress: event.venueAddress || "",
       });
     }
   }, [open, event]);
@@ -118,6 +130,9 @@ export function EditEventDialog({
         price: editForm.price,
         capacity: editForm.capacity,
         imageUrl: editForm.imageUrl.trim() || undefined,
+        event_type: editForm.eventType,
+        venue_name: editForm.venueName.trim() || undefined,
+        venue_address: editForm.venueAddress.trim() || undefined,
       });
 
       console.log("✅ Event updated successfully");
@@ -240,6 +255,49 @@ export function EditEventDialog({
               }
             />
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="edit-event-type">Event Type</Label>
+            <select
+              id="edit-event-type"
+              value={editForm.eventType}
+              onChange={(e) =>
+                setEditForm({
+                  ...editForm,
+                  eventType: e.target.value as "virtual" | "in-person",
+                })
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+            >
+              <option value="virtual">Virtual</option>
+              <option value="in-person">In-Person</option>
+            </select>
+          </div>
+          {editForm.eventType === "in-person" && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="edit-venue-name">Venue Name</Label>
+                <Input
+                  id="edit-venue-name"
+                  placeholder="e.g., Community Center"
+                  value={editForm.venueName}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, venueName: e.target.value })
+                  }
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-venue-address">Venue Address</Label>
+                <Input
+                  id="edit-venue-address"
+                  placeholder="e.g., 123 Main St, Anytown, USA"
+                  value={editForm.venueAddress}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, venueAddress: e.target.value })
+                  }
+                />
+              </div>
+            </>
+          )}
         </div>
         <DialogFooter>
           <Button
