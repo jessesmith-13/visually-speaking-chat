@@ -18,18 +18,33 @@ import {
   Trash2,
   Filter,
   Edit,
+  Video,
+  MapPin,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/ui/alert-dialog";
 import { useApp } from "@/app/hooks";
 import { Event } from "@/features/events/types";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import { EditEventDialog } from "./components/EditEventDialog";
+import { Pagination } from "@/components/common/Pagination";
+import { usePagination } from "@/features/events/hooks";
 
 export function EventsRoute() {
   const navigate = useNavigate();
   const { events, user, setCurrentEvent, removeEvent, refreshEvents } =
     useApp();
   const [deletingEventId, setDeletingEventId] = useState<string | null>(null);
+  const [eventToCancel, setEventToCancel] = useState<Event | null>(null);
   const [activeTab, setActiveTab] = useState<
     "upcoming" | "past" | "live" | "cancelled"
   >("upcoming");
@@ -51,19 +66,16 @@ export function EventsRoute() {
 
   const handleCancelEvent = async (event: Event, e: React.MouseEvent) => {
     e.stopPropagation();
+    setEventToCancel(event);
+  };
 
-    if (
-      !window.confirm(
-        `Are you sure you want to cancel "${event.name}"? This will delete the event and all associated tickets.`,
-      )
-    ) {
-      return;
-    }
+  const confirmCancelEvent = async () => {
+    if (!eventToCancel) return;
 
-    setDeletingEventId(event.id);
+    setDeletingEventId(eventToCancel.id);
 
     try {
-      await removeEvent(event.id);
+      await removeEvent(eventToCancel.id);
       toast.success("Event cancelled successfully");
     } catch (error: unknown) {
       const errorMessage =
@@ -72,6 +84,7 @@ export function EventsRoute() {
       toast.error(errorMessage);
     } finally {
       setDeletingEventId(null);
+      setEventToCancel(null);
     }
   };
 
@@ -120,6 +133,29 @@ export function EventsRoute() {
     return false;
   });
 
+  // Calculate pagination
+  const {
+    currentPage,
+    totalPages,
+    paginatedItems: paginatedEvents,
+    handlePageChange,
+    resetPage,
+  } = usePagination(filteredEvents, 6);
+
+  console.log("📊 [PAGINATION DEBUG] Filtered events:", filteredEvents.length);
+  console.log("📊 [PAGINATION DEBUG] Current page:", currentPage);
+  console.log("📊 [PAGINATION DEBUG] Total pages:", totalPages);
+  console.log(
+    "📊 [PAGINATION DEBUG] Paginated events:",
+    paginatedEvents.length,
+  );
+
+  // Handle tab change and reset pagination
+  const handleTabChange = (tab: "upcoming" | "past" | "live" | "cancelled") => {
+    setActiveTab(tab);
+    resetPage(); // Reset to first page when changing tabs
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container mx-auto px-4 py-12">
@@ -156,7 +192,7 @@ export function EventsRoute() {
               <select
                 value={activeTab}
                 onChange={(e) =>
-                  setActiveTab(
+                  handleTabChange(
                     e.target.value as
                       | "upcoming"
                       | "past"
@@ -175,7 +211,7 @@ export function EventsRoute() {
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredEvents.length === 0 ? (
+            {paginatedEvents.length === 0 ? (
               <div className="col-span-full text-center py-12">
                 <p className="text-gray-500 dark:text-gray-400 text-lg">
                   {activeTab === "past"
@@ -190,7 +226,7 @@ export function EventsRoute() {
                 </p>
               </div>
             ) : (
-              filteredEvents.map((event) => (
+              paginatedEvents.map((event) => (
                 <Card
                   key={event.id}
                   className="cursor-pointer hover:shadow-lg transition-shadow"
@@ -209,6 +245,28 @@ export function EventsRoute() {
                     <div className="flex items-start justify-between gap-2 flex-wrap">
                       <CardTitle className="text-xl">{event.name}</CardTitle>
                       <div className="flex flex-wrap gap-2">
+                        {/* Event Type Badge */}
+                        <Badge
+                          variant="secondary"
+                          className={
+                            event.eventType === "in-person"
+                              ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 flex items-center gap-1"
+                              : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 flex items-center gap-1"
+                          }
+                        >
+                          {event.eventType === "in-person" ? (
+                            <>
+                              <MapPin className="size-3" />
+                              In-Person
+                            </>
+                          ) : (
+                            <>
+                              <Video className="size-3" />
+                              Virtual
+                            </>
+                          )}
+                        </Badge>
+
                         {event.status === "cancelled" && (
                           <Badge
                             variant="secondary"
@@ -321,6 +379,14 @@ export function EventsRoute() {
               ))
             )}
           </div>
+
+          <Pagination
+            totalItems={filteredEvents.length}
+            itemsPerPage={6}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
         </div>
       </div>
 
@@ -339,6 +405,33 @@ export function EventsRoute() {
           }}
         />
       )}
+
+      {/* Cancel Event Dialog */}
+      <AlertDialog
+        open={!!eventToCancel}
+        onOpenChange={(open) => {
+          if (!open) setEventToCancel(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel Event</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to cancel "{eventToCancel?.name}"? This will
+              delete the event and all associated tickets.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmCancelEvent}
+              disabled={!!deletingEventId}
+            >
+              {deletingEventId ? "Cancelling..." : "Cancel Event"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

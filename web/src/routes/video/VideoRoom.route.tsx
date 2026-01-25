@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
@@ -221,6 +221,30 @@ export function VideoRoomRoute() {
     };
   }, [currentEvent]);
 
+  // Memoize handler functions to prevent DailyVideoChat re-renders
+  const handleLeave = useCallback(async () => {
+    if (currentEvent) {
+      await matchmaking.leaveQueue(currentEvent.id);
+    }
+    navigate("/events");
+  }, [currentEvent, navigate]);
+
+  const handleNext = useCallback(async () => {
+    if (!currentEvent) return;
+
+    setMatchStatus("searching");
+    setConnectionTime(0);
+    setDailyUrl("");
+
+    // Leave current match and rejoin queue
+    try {
+      await matchmaking.leaveQueue(currentEvent.id);
+      await matchmaking.joinQueue(currentEvent.id);
+    } catch (error) {
+      console.error("Error finding next partner:", error);
+    }
+  }, [currentEvent]);
+
   if (!currentEvent || !user) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -268,29 +292,6 @@ export function VideoRoomRoute() {
     } finally {
       setIsJoining(false);
     }
-  };
-
-  const handleNext = async () => {
-    if (!currentEvent) return;
-
-    setMatchStatus("searching");
-    setConnectionTime(0);
-    setDailyUrl("");
-
-    // Leave current match and rejoin queue
-    try {
-      await matchmaking.leaveQueue(currentEvent.id);
-      await matchmaking.joinQueue(currentEvent.id);
-    } catch (error) {
-      console.error("Error finding next partner:", error);
-    }
-  };
-
-  const handleLeave = async () => {
-    if (currentEvent) {
-      await matchmaking.leaveQueue(currentEvent.id);
-    }
-    navigate("/events");
   };
 
   const formatTime = (seconds: number) => {

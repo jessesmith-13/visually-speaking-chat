@@ -196,9 +196,12 @@ Deno.serve(async (req) => {
               image_url: eventData.imageUrl,
               status: "upcoming",
               created_by: userId,
+              event_type: eventData.event_type || "virtual",
+              venue_name: eventData.venue_name,
+              venue_address: eventData.venue_address,
             })
             .select(
-              "id, name, description, date, duration, price, capacity, attendees, image_url, status, created_by, created_at",
+              "id, name, description, date, duration, price, capacity, attendees, image_url, status, created_by, created_at, event_type, venue_name, venue_address",
             )
             .single();
 
@@ -300,6 +303,21 @@ Deno.serve(async (req) => {
             updatePayload.image_url = updateData.imageUrl;
           }
 
+          // Include event_type if present
+          if (updateData.event_type !== undefined) {
+            updatePayload.event_type = updateData.event_type;
+          }
+
+          // Include venue_name if present
+          if (updateData.venue_name !== undefined) {
+            updatePayload.venue_name = updateData.venue_name;
+          }
+
+          // Include venue_address if present
+          if (updateData.venue_address !== undefined) {
+            updatePayload.venue_address = updateData.venue_address;
+          }
+
           // Check if there are any fields to update besides updated_at
           if (Object.keys(updatePayload).length === 1) {
             return badRequest("No valid fields to update", corsHeaders);
@@ -312,7 +330,7 @@ Deno.serve(async (req) => {
             .update(updatePayload)
             .eq("id", eventId)
             .select(
-              "id, name, description, date, duration, price, capacity, attendees, image_url, status, created_by, updated_at",
+              "id, name, description, date, duration, price, capacity, attendees, image_url, status, created_by, updated_at, event_type, venue_name, venue_address",
             )
             .single();
 
