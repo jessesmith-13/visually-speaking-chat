@@ -296,9 +296,10 @@ export function EventsRoute() {
                         )}
                       </div>
                     </div>
-                    <CardDescription className="line-clamp-2">
-                      {event.description}
-                    </CardDescription>
+                    <CardDescription
+                      className="line-clamp-2 prose prose-sm dark:prose-invert max-w-none"
+                      dangerouslySetInnerHTML={{ __html: event.description }}
+                    />
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <div className="flex items-center gap-2 text-sm">

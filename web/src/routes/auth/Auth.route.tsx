@@ -241,6 +241,7 @@ export function AuthRoute() {
             purchasedTickets: [],
             isAdmin: false,
           });
+
           navigate("/events");
         } else {
           // Email confirmation required

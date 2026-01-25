@@ -35,9 +35,10 @@ export function EventHeader({
           <div className="flex items-start justify-between">
             <div>
               <CardTitle className="text-3xl mb-2">{event.name}</CardTitle>
-              <CardDescription className="text-lg">
-                {event.description}
-              </CardDescription>
+              <CardDescription
+                className="text-lg prose prose-sm dark:prose-invert max-w-none"
+                dangerouslySetInnerHTML={{ __html: event.description }}
+              />
             </div>
             <div className="flex flex-col gap-2 items-end">
               {/* Event Type Badge */}

@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/ui/button";
 import { Input } from "@/ui/input";
 import { Label } from "@/ui/label";
-import { Textarea } from "@/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
 import {
   ArrowLeft,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { useApp } from "@/app/hooks";
 import { toast } from "sonner";
+import { RichTextEditor } from "@/components/common/RichTextEditor";
 
 export function CreateEventRoute() {
   const navigate = useNavigate();
@@ -150,18 +150,15 @@ export function CreateEventRoute() {
               </div>
 
               {/* Description */}
-              <div className="space-y-2">
-                <Label htmlFor="description">Description *</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleChange}
-                  placeholder="Describe what makes this event special..."
-                  rows={4}
-                  required
-                />
-              </div>
+              <RichTextEditor
+                label="Description"
+                value={formData.description}
+                onChange={(value) =>
+                  setFormData((prev) => ({ ...prev, description: value }))
+                }
+                placeholder="Describe what makes this event special..."
+                required
+              />
 
               {/* Date and Time */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
