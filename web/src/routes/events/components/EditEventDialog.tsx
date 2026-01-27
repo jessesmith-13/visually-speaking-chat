@@ -13,6 +13,7 @@ import {
 } from "@/ui/dialog";
 import { updateEvent } from "@/features/events/api";
 import { toast } from "sonner";
+import { ImageUpload } from "@/components/common/ImageUpload";
 
 interface Event {
   id: string;
@@ -245,14 +246,10 @@ export function EditEventDialog({
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="edit-image">Image URL (optional)</Label>
-            <Input
-              id="edit-image"
-              placeholder="https://example.com/image.jpg"
+            <ImageUpload
+              label="Image (optional)"
               value={editForm.imageUrl}
-              onChange={(e) =>
-                setEditForm({ ...editForm, imageUrl: e.target.value })
-              }
+              onChange={(url) => setEditForm({ ...editForm, imageUrl: url })}
             />
           </div>
           <div className="space-y-2">

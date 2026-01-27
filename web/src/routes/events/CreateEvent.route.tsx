@@ -16,6 +16,7 @@ import {
 import { useApp } from "@/app/hooks";
 import { toast } from "sonner";
 import { RichTextEditor } from "@/components/common/RichTextEditor";
+import { ImageUpload } from "@/components/common/ImageUpload";
 
 export function CreateEventRoute() {
   const navigate = useNavigate();
@@ -246,20 +247,13 @@ export function CreateEventRoute() {
               </div>
 
               {/* Image URL */}
-              <div className="space-y-2">
-                <Label htmlFor="imageUrl">Image URL (optional)</Label>
-                <Input
-                  id="imageUrl"
-                  name="imageUrl"
-                  type="url"
-                  value={formData.imageUrl}
-                  onChange={handleChange}
-                  placeholder="https://images.unsplash.com/..."
-                />
-                <p className="text-sm text-gray-500">
-                  Enter an image URL or leave blank for a default image
-                </p>
-              </div>
+              <ImageUpload
+                label="Event Image (optional)"
+                value={formData.imageUrl}
+                onChange={(url) =>
+                  setFormData((prev) => ({ ...prev, imageUrl: url }))
+                }
+              />
 
               {/* Event Type */}
               <div className="space-y-2">
