@@ -196,11 +196,51 @@ export function VideoRoomRoute() {
     };
   }, [matchStatus]);
 
-  // Simulate online users count
+  // Track actual online users in the matchmaking queue
   useEffect(() => {
-    const count = Math.floor(Math.random() * 20) + 15;
-    setOnlineUsers(count);
-  }, []);
+    if (!currentEvent) return;
+
+    // Fetch initial count
+    const fetchOnlineCount = async () => {
+      try {
+        const { count, error } = await supabase
+          .from("matchmaking_queue")
+          .select("*", { count: "exact", head: true })
+          .eq("event_id", currentEvent.id)
+          .gt("expires_at", new Date().toISOString());
+
+        if (!error && count !== null) {
+          setOnlineUsers(count);
+        }
+      } catch (error) {
+        console.error("Error fetching online users count:", error);
+      }
+    };
+
+    fetchOnlineCount();
+
+    // Subscribe to real-time changes in the queue
+    const channel = supabase
+      .channel(`online-users-${currentEvent.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "matchmaking_queue",
+          filter: `event_id=eq.${currentEvent.id}`,
+        },
+        () => {
+          // Refetch count when queue changes
+          fetchOnlineCount();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentEvent]);
 
   // Cleanup on unmount - use ref to track status
   const matchStatusRef = useRef(matchStatus);
@@ -301,46 +341,51 @@ export function VideoRoomRoute() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
+    <div className="min-h-screen bg-gray-900 text-white overflow-x-hidden">
       {/* Header */}
       <div className="bg-gray-800 border-b border-gray-700">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="w-full px-2 sm:px-4 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleLeave}
-                className="text-gray-400 hover:text-white"
+                className="text-gray-400 hover:text-white flex-shrink-0"
               >
-                <ArrowLeft className="size-4 mr-2" />
-                Back
+                <ArrowLeft className="size-4 mr-1 sm:mr-2" />
+                <span className="hidden sm:inline">Back</span>
               </Button>
-              <div>
-                <h2 className="font-semibold">{currentEvent.name}</h2>
-                <div className="flex items-center gap-4 text-sm text-gray-400 mt-1">
+              <div className="min-w-0">
+                <h2 className="font-semibold text-sm sm:text-base truncate">
+                  {currentEvent.name}
+                </h2>
+                <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400 mt-1">
                   <div className="flex items-center gap-1">
-                    <Users className="size-4" />
+                    <Users className="size-3 sm:size-4" />
                     <span>{onlineUsers} online</span>
                   </div>
                   {matchStatus === "matched" && (
                     <div className="flex items-center gap-1">
-                      <Clock className="size-4" />
+                      <Clock className="size-3 sm:size-4" />
                       <span>{formatTime(connectionTime)}</span>
                     </div>
                   )}
                 </div>
               </div>
             </div>
-            <Badge variant="default" className="bg-green-600">
-              Connected as {user.name}
+            <Badge
+              variant="default"
+              className="bg-green-600 text-xs sm:text-sm flex-shrink-0"
+            >
+              {user.name}
             </Badge>
           </div>
         </div>
       </div>
 
       {/* Video Area */}
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full px-2 sm:px-4 py-4 sm:py-8 max-w-6xl mx-auto">
         {matchStatus === "searching" && (
           <div className="mb-4 p-4 bg-blue-900/50 border border-blue-700 rounded-lg">
             <div className="flex items-start gap-3">
@@ -362,20 +407,26 @@ export function VideoRoomRoute() {
         <div className="mb-8">
           <Card className="bg-gray-800 border-gray-700">
             <CardContent className="p-0">
-              <div className="relative aspect-video bg-gray-900 rounded-lg overflow-hidden">
+              <div
+                className={`relative aspect-video bg-gray-900 rounded-lg ${
+                  matchStatus === "matched" && dailyUrl
+                    ? "overflow-hidden"
+                    : "overflow-visible"
+                }`}
+              >
                 {matchStatus === "not_started" ? (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center max-w-md px-4">
-                      <Users className="size-16 text-gray-600 mx-auto mb-4" />
-                      <h3 className="text-xl font-semibold mb-2">
+                  <div className="absolute inset-0 flex items-center justify-center p-4">
+                    <div className="text-center max-w-md w-full">
+                      <Users className="size-12 sm:size-16 text-gray-600 mx-auto mb-3 sm:mb-4" />
+                      <h3 className="text-lg sm:text-xl font-semibold mb-2">
                         Ready to Connect?
                       </h3>
-                      <p className="text-gray-400 mb-6">
+                      <p className="text-sm sm:text-base text-gray-400 mb-4 sm:mb-6">
                         Click the button below to start meeting other attendees
                         through random video chat pairings.
                       </p>
                       {permissionError && (
-                        <div className="mb-4 p-3 bg-red-900/50 border border-red-700 rounded-lg text-sm text-red-200">
+                        <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-900/50 border border-red-700 rounded-lg text-xs sm:text-sm text-red-200">
                           {permissionError}
                         </div>
                       )}
@@ -383,7 +434,7 @@ export function VideoRoomRoute() {
                         size="lg"
                         onClick={handleStartMatching}
                         disabled={isJoining}
-                        className="bg-blue-600 hover:bg-blue-700"
+                        className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
                       >
                         {isJoining ? (
                           <>
@@ -427,14 +478,14 @@ export function VideoRoomRoute() {
 
         {/* Controls - Only show when matched and in call */}
         {matchStatus === "matched" && dailyUrl && (
-          <div className="flex items-center justify-center gap-4">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-4">
             <Button
               size="lg"
               variant="default"
               onClick={handleNext}
-              className="h-14 px-8"
+              className="w-full sm:w-auto h-12 sm:h-14 px-6 sm:px-8"
             >
-              <SkipForward className="size-6 mr-2" />
+              <SkipForward className="size-5 sm:size-6 mr-2" />
               Next Partner
             </Button>
 
@@ -442,20 +493,23 @@ export function VideoRoomRoute() {
               size="lg"
               variant="destructive"
               onClick={handleLeave}
-              className="h-14 w-14 rounded-full"
+              className="w-full sm:w-auto h-12 sm:h-14 sm:w-14 sm:rounded-full"
             >
-              <PhoneOff className="size-6" />
+              <PhoneOff className="size-5 sm:size-6" />
+              <span className="sm:hidden ml-2">Leave Event</span>
             </Button>
           </div>
         )}
 
         {/* Info Card */}
         <Card className="mt-8 bg-gray-800 border-gray-700 max-w-2xl mx-auto">
-          <CardContent className="pt-6">
+          <CardContent className="pt-6 px-4">
             <div className="space-y-4">
               <div>
-                <h3 className="font-semibold mb-2">How it works:</h3>
-                <ul className="text-sm text-gray-300 space-y-1">
+                <h3 className="font-semibold mb-2 text-sm sm:text-base">
+                  How it works:
+                </h3>
+                <ul className="text-xs sm:text-sm text-gray-300 space-y-1">
                   <li>• Click "Start Matching" to join the queue</li>
                   <li>
                     • You'll be randomly paired with another event attendee
@@ -471,7 +525,7 @@ export function VideoRoomRoute() {
                 </ul>
               </div>
               <div className="border-t border-gray-700 pt-4">
-                <p className="text-sm text-gray-400">
+                <p className="text-xs sm:text-sm text-gray-400">
                   <strong>Note:</strong> Video calls are powered by Daily.co for
                   reliable, high-quality connections. The matchmaking system
                   pairs you randomly with other attendees who have purchased

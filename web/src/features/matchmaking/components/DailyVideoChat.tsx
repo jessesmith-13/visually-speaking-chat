@@ -124,8 +124,7 @@ export function DailyVideoChat({
   return (
     <div
       ref={containerRef}
-      className="relative w-full h-full min-h-[500px]"
-      style={{ aspectRatio: "16/9" }}
+      className="relative w-full h-full min-h-[300px] sm:min-h-[400px] md:min-h-[500px]"
     />
   );
 }
