@@ -88,7 +88,7 @@ export function DailyVideoChat({
           url: roomUrl,
           userName: userName,
           videoSource: true,
-          audioSource: true,
+          audioSource: false, // Disable microphone for deaf/HOH events
           startVideoOff: false,
           startAudioOff: true,
         });
