@@ -35,10 +35,12 @@ export function VideoRoomRoute() {
 
   const hasTicket =
     user?.purchasedTickets.includes(currentEvent?.id || "") || false;
+  const isAdmin = user?.isAdmin || false;
+  const canJoinEvent = hasTicket || isAdmin;
 
   // Subscribe to matchmaking updates
   useEffect(() => {
-    if (!currentEvent || !user || !hasTicket) return;
+    if (!currentEvent || !user || !canJoinEvent) return;
 
     let unsubscribe: (() => void) | undefined;
 
@@ -97,7 +99,7 @@ export function VideoRoomRoute() {
         unsubscribe();
       }
     };
-  }, [currentEvent, user, hasTicket]);
+  }, [currentEvent, user, canJoinEvent]);
 
   // Fetch Daily.co URL when we get a room match
   useEffect(() => {
@@ -206,8 +208,7 @@ export function VideoRoomRoute() {
         const { count, error } = await supabase
           .from("matchmaking_queue")
           .select("*", { count: "exact", head: true })
-          .eq("event_id", currentEvent.id)
-          .gt("expires_at", new Date().toISOString());
+          .eq("event_id", currentEvent.id);
 
         if (!error && count !== null) {
           setOnlineUsers(count);
@@ -298,7 +299,7 @@ export function VideoRoomRoute() {
     );
   }
 
-  if (!hasTicket) {
+  if (!canJoinEvent) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <Card>
@@ -320,8 +321,25 @@ export function VideoRoomRoute() {
     setPermissionError("");
 
     try {
-      console.log("📋 Joining matchmaking queue...");
+      // Request camera permission first (especially important for mobile)
+      console.log("📹 Requesting camera permission...");
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false, // No audio for deaf/HOH events
+        });
 
+        // Stop the stream immediately - we just needed to get permission
+        stream.getTracks().forEach((track) => track.stop());
+        console.log("✅ Camera permission granted");
+      } catch (permError) {
+        console.error("❌ Camera permission denied:", permError);
+        throw new Error(
+          "Camera access is required to join video chat. Please allow camera access in your browser settings.",
+        );
+      }
+
+      console.log("📋 Joining matchmaking queue...");
       await matchmaking.joinQueue(currentEvent.id);
       setMatchStatus("searching");
     } catch (error: unknown) {

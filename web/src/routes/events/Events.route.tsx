@@ -97,6 +97,10 @@ export function EventsRoute() {
     return user?.purchasedTickets.includes(eventId);
   };
 
+  const canJoinEvent = (eventId: string) => {
+    return hasTicket(eventId) || user?.isAdmin || false;
+  };
+
   // Helper functions for event status
   const isEventLive = (event: Event) => {
     const now = new Date();
@@ -294,6 +298,14 @@ export function EventsRoute() {
                         {hasTicket(event.id) && (
                           <Badge variant="default">Ticket Owned</Badge>
                         )}
+                        {user?.isAdmin && !hasTicket(event.id) && (
+                          <Badge
+                            variant="default"
+                            className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100"
+                          >
+                            👑 Admin
+                          </Badge>
+                        )}
                       </div>
                     </div>
                     <CardDescription
@@ -326,7 +338,7 @@ export function EventsRoute() {
                   </CardContent>
                   <CardFooter>
                     <div className="w-full flex flex-col gap-2">
-                      {hasTicket(event.id) ? (
+                      {canJoinEvent(event.id) ? (
                         <Button
                           className="w-full"
                           onClick={(e) => handleJoinEvent(event, e)}

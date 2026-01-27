@@ -50,6 +50,9 @@ export function TicketPurchaseCard({
   onCancelEvent,
   onEditEvent,
 }: TicketPurchaseCardProps) {
+  const isAdmin = user?.isAdmin || false;
+  const canJoinEvent = hasTicket || isAdmin;
+
   return (
     <Card className="sticky top-4">
       <CardHeader>
@@ -76,7 +79,7 @@ export function TicketPurchaseCard({
               Sign In
             </Button>
           </>
-        ) : hasTicket ? (
+        ) : canJoinEvent ? (
           <>
             {event.status === "cancelled" ? (
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -94,7 +97,9 @@ export function TicketPurchaseCard({
               <>
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800 font-medium mb-1">
-                    ✓ You have a ticket for this event
+                    {isAdmin && !hasTicket
+                      ? "👑 Admin Access Granted"
+                      : "✓ You have a ticket for this event"}
                   </p>
                   <p className="text-xs text-green-700">
                     Event starts at {format(new Date(event.date), "p")}
@@ -110,7 +115,9 @@ export function TicketPurchaseCard({
               <>
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800 font-medium">
-                    ✓ You have a ticket for this event
+                    {isAdmin && !hasTicket
+                      ? "👑 Admin Access - No Ticket Required"
+                      : "✓ You have a ticket for this event"}
                   </p>
                 </div>
                 <Button
@@ -122,7 +129,7 @@ export function TicketPurchaseCard({
                 </Button>
               </>
             )}
-            {user?.isAdmin && (
+            {isAdmin && (
               <Button
                 className="w-full mt-2"
                 variant="destructive"
@@ -137,7 +144,7 @@ export function TicketPurchaseCard({
                     : "Cancel Event (Admin)"}
               </Button>
             )}
-            {user?.isAdmin && (
+            {isAdmin && (
               <Button
                 className="w-full mt-2"
                 variant="outline"
