@@ -3,6 +3,7 @@
  *
  * Handles matchmaking queue and user pairing for events
  * Uses atomic RPC operations to prevent race conditions
+ * Creates Daily.co video rooms for matched users
  *
  * Endpoints:
  *   POST /join - Join matchmaking queue (requires ticket)
@@ -37,13 +38,64 @@ interface Route {
   handler: RouteHandler;
 }
 
+/**
+ * Create a Daily.co room for matched users
+ */
+async function createDailyRoom(roomId: string): Promise<string | null> {
+  const dailyApiKey = Deno.env.get("DAILY_API_KEY");
+
+  if (!dailyApiKey) {
+    console.error("❌ DAILY_API_KEY not set");
+    return null;
+  }
+
+  try {
+    console.log("🎥 Creating Daily.co room:", roomId);
+
+    const response = await fetch("https://api.daily.co/v1/rooms", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${dailyApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: roomId, // Use our generated room_id as the Daily room name
+        privacy: "public",
+        properties: {
+          max_participants: 2,
+          enable_chat: false, // ASL users communicate via video
+          enable_screenshare: false,
+          enable_recording: "local", // Optional: for moderation
+          exp: Math.floor(Date.now() / 1000) + 7200, // Room expires in 2 hours
+          start_video_off: false,
+          start_audio_off: true, // Start muted (deaf/HoH users)
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("❌ Daily.co API error:", response.status, errorText);
+      return null;
+    }
+
+    const dailyRoom = await response.json();
+    console.log("✅ Daily.co room created:", dailyRoom.url);
+
+    return dailyRoom.url;
+  } catch (error) {
+    console.error("❌ Error creating Daily.co room:", error);
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   // Handle CORS
   const { earlyResponse, headers: corsHeaders } = handleCors(req);
   if (earlyResponse) return earlyResponse;
 
   try {
-    // Authenticate user with anon key client (respects RLS)
+    // Authenticate user
     const authClient = createAuthClient();
     const userResult = await requireUser(req, authClient, corsHeaders);
     if (userResult instanceof Response)
@@ -84,7 +136,7 @@ Deno.serve(async (req) => {
           // Check if user is admin
           const { data: profile, error: profileError } = await supabaseAdmin
             .from("profiles")
-            .select("role")
+            .select("is_admin")
             .eq("id", userId)
             .single();
 
@@ -93,7 +145,7 @@ Deno.serve(async (req) => {
             return serverError(profileError, corsHeaders);
           }
 
-          const isAdmin = profile?.role === "admin";
+          const isAdmin = profile?.is_admin === true;
 
           // Verify user has a ticket (unless they're an admin)
           if (!isAdmin) {
@@ -162,12 +214,31 @@ Deno.serve(async (req) => {
           const matchResult = matchData[0];
           if (matchResult.success) {
             console.log("✅ Match found:", matchResult.room_id);
+
+            // Create Daily.co room
+            const dailyUrl = await createDailyRoom(matchResult.room_id);
+
+            if (dailyUrl) {
+              // Update video_rooms table with Daily.co URL
+              const { error: updateError } = await supabaseAdmin
+                .from("video_rooms")
+                .update({ daily_url: dailyUrl })
+                .eq("id", matchResult.room_id);
+
+              if (updateError) {
+                console.error("❌ Error updating video_rooms:", updateError);
+              } else {
+                console.log("✅ Daily.co URL saved to video_rooms");
+              }
+            }
+
             return json(
               {
                 success: true,
                 status: "matched",
                 matched: true,
                 roomId: matchResult.room_id,
+                dailyUrl: dailyUrl || undefined,
               },
               200,
               corsHeaders,
@@ -330,11 +401,28 @@ Deno.serve(async (req) => {
           const matchResult = matchData[0];
           if (matchResult.success) {
             console.log("✅ Match found:", matchResult.room_id);
+
+            // Create Daily.co room
+            const dailyUrl = await createDailyRoom(matchResult.room_id);
+
+            if (dailyUrl) {
+              // Update video_rooms table with Daily.co URL
+              const { error: updateError } = await supabaseAdmin
+                .from("video_rooms")
+                .update({ daily_url: dailyUrl })
+                .eq("id", matchResult.room_id);
+
+              if (updateError) {
+                console.error("❌ Error updating video_rooms:", updateError);
+              }
+            }
+
             return json(
               {
                 success: true,
                 matched: true,
                 roomId: matchResult.room_id,
+                dailyUrl: dailyUrl || undefined,
               },
               200,
               corsHeaders,
@@ -390,10 +478,27 @@ Deno.serve(async (req) => {
           const result = data[0];
           if (result.success) {
             console.log("✅ Match created:", result.room_id);
+
+            // Create Daily.co room
+            const dailyUrl = await createDailyRoom(result.room_id);
+
+            if (dailyUrl) {
+              // Update video_rooms table with Daily.co URL
+              const { error: updateError } = await supabaseAdmin
+                .from("video_rooms")
+                .update({ daily_url: dailyUrl })
+                .eq("id", result.room_id);
+
+              if (updateError) {
+                console.error("❌ Error updating video_rooms:", updateError);
+              }
+            }
+
             return json(
               {
                 matched: true,
                 roomId: result.room_id,
+                dailyUrl: dailyUrl || undefined,
                 users: [result.user1_id, result.user2_id],
               },
               200,

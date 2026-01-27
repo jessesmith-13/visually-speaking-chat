@@ -30,7 +30,8 @@ function isOriginAllowed(origin: string | null): boolean {
       hostname.endsWith(".makeproxy-c.figma.site") ||
       hostname.endsWith(".figma.site") ||
       hostname === "visually-speaking.vercel.app" ||
-      hostname.endsWith(".vercel.app")
+      hostname.endsWith(".vercel.app") ||
+      hostname === "app.visuallyspeaking.info"
     );
   }
 
