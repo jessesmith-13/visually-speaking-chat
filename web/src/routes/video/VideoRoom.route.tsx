@@ -452,23 +452,14 @@ export function VideoRoomRoute() {
                       </div>
                     </div>
                   ) : matchStatus === "matched" ? (
-                    dailyUrl ? (
-                      <DailyVideoChat
-                        roomUrl={dailyUrl}
-                        userName={user.name}
-                        onLeave={handleLeave}
-                        onNext={handleNext}
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-center">
-                          <Loader2 className="size-12 text-blue-500 mx-auto mb-4 animate-spin" />
-                          <p className="text-gray-400">
-                            Creating video room...
-                          </p>
-                        </div>
-                      </div>
-                    )
+                    // ALWAYS render DailyVideoChat when matched - don't wait for dailyUrl
+                    // This prevents remounting when dailyUrl arrives
+                    <DailyVideoChat
+                      roomUrl={dailyUrl}
+                      userName={user.name}
+                      onLeave={handleLeave}
+                      onNext={handleNext}
+                    />
                   ) : null}
                 </div>
               </CardContent>
