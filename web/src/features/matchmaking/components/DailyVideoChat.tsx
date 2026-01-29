@@ -198,20 +198,39 @@ export function DailyVideoChat({
         clearTimeout(fallbackTimeout);
         hasJoinedRef.current = true;
 
-        // If user chose no camera, explicitly disable it
-        if (!useCameraChoice && callFrameRef.current) {
-          console.log("📹 Ensuring camera is off...");
+        // Hide joining state
+        if (isMounted) {
+          setIsJoining(false);
+        }
+
+        // NOW enable camera if user wanted it (after we're already in the call)
+        if (useCameraChoice && callFrameRef.current) {
+          console.log("📹 Now enabling camera AFTER join...");
+          setTimeout(async () => {
+            if (callFrameRef.current && isMounted) {
+              try {
+                await callFrameRef.current.setLocalVideo(true);
+                console.log("✅ Camera enabled successfully after join!");
+              } catch (err) {
+                console.error("❌ Failed to enable camera after join:", err);
+                // Show error if camera enable fails
+                if (isMounted) {
+                  setShowCameraError(true);
+                  setDebugError(
+                    `Failed to enable camera after joining: ${err}`,
+                  );
+                }
+              }
+            }
+          }, 500); // Small delay to ensure join is fully complete
+        } else if (!useCameraChoice && callFrameRef.current) {
+          console.log("📹 Ensuring camera stays off...");
           try {
             callFrameRef.current.setLocalVideo(false);
             console.log("✅ Camera disabled");
           } catch (err) {
             console.log("ℹ️ Could not disable camera (already off):", err);
           }
-        }
-
-        // Hide joining state
-        if (isMounted) {
-          setIsJoining(false);
         }
       });
 
@@ -307,54 +326,29 @@ export function DailyVideoChat({
         console.log("🔗 Room URL:", roomUrl);
         console.log("👤 User name:", userName);
 
-        // Join configuration - Different approach based on camera choice
-        let joinConfig: DailyCallOptions;
-
-        if (useCameraChoice) {
-          // User wants camera - request it explicitly
-          joinConfig = {
-            url: roomUrl,
-            userName: userName,
-            startVideoOff: false,
-            startAudioOff: true,
-          };
-        } else {
-          // User doesn't want camera - DON'T mention video at all
-          joinConfig = {
-            url: roomUrl,
-            userName: userName,
-            startAudioOff: true,
-          };
-        }
+        // NEW APPROACH: Always join with video OFF first, then enable it after joined
+        const joinConfig: DailyCallOptions = {
+          url: roomUrl,
+          userName: userName,
+          startVideoOff: true, // ALWAYS start with video off
+          startAudioOff: true,
+        };
 
         console.log("⚙️ Join config:", joinConfig);
+        console.log("📹 Will enable camera AFTER joining if user wants it");
 
         // Call join - don't wait for the promise, rely on 'joined-meeting' event instead
         // This prevents hanging when there are camera permission issues
         callFrame.join(joinConfig).catch((error) => {
           console.error("❌ Join promise rejected:", error);
 
-          // Check if it's a camera-related error
+          // For join errors, just show an alert
           const errorMessage =
             error instanceof Error ? error.message : String(error);
-          if (
-            useCameraChoice &&
-            (errorMessage.toLowerCase().includes("camera") ||
-              errorMessage.toLowerCase().includes("video") ||
-              errorMessage.toLowerCase().includes("permission") ||
-              errorMessage.toLowerCase().includes("notfound"))
-          ) {
-            if (isMounted) {
-              setDebugError(`Join error: ${errorMessage}`); // ADD DEBUG
-              setIsJoining(false);
-              setShowCameraError(true);
-            }
-          } else {
-            // For non-camera errors that truly prevent joining, show alert
-            if (isMounted) {
-              setIsJoining(false);
-              alert(`Failed to join video chat: ${errorMessage}`);
-            }
+          if (isMounted) {
+            setDebugError(`Join error: ${errorMessage}`); // ADD DEBUG
+            setIsJoining(false);
+            alert(`Failed to join video chat: ${errorMessage}`);
           }
         });
 
