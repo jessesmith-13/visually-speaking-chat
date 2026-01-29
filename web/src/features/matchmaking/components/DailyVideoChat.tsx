@@ -28,6 +28,13 @@ export function DailyVideoChat({
   const callFrameRef = useRef<DailyCall | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const hasJoinedRef = useRef(false);
+  const isInitializingRef = useRef(false); // MUST be a ref, not local variable!
+  const onLeaveRef = useRef(onLeave); // Store onLeave in ref to avoid dependency changes
+
+  // Keep onLeave ref up to date
+  useEffect(() => {
+    onLeaveRef.current = onLeave;
+  }, [onLeave]);
 
   // Permission flow state
   const [showPermissionDialog, setShowPermissionDialog] = useState(true);
@@ -53,11 +60,33 @@ export function DailyVideoChat({
       setShowPermissionDialog(false);
       setIsJoining(true);
     } catch (error) {
-      console.error("❌ Camera permission denied:", error);
+      console.error("❌ Camera error:", error);
 
-      // Show error dialog with instructions
-      setShowPermissionDialog(false);
-      setShowCameraError(true);
+      // Check the specific error type
+      const err = error as { name?: string; message?: string };
+      console.log("❌ Error name:", err.name);
+      console.log("❌ Error message:", err.message);
+
+      // Only show the "blocked" dialog for actual permission denials
+      if (
+        err.name === "NotAllowedError" ||
+        err.name === "PermissionDeniedError"
+      ) {
+        console.log("🚫 Permission specifically denied");
+        setShowPermissionDialog(false);
+        setShowCameraError(true);
+      } else {
+        // For other errors (camera in use, hardware issues, etc), just join without camera
+        console.log(
+          "⚠️ Camera error but not permission issue - joining without camera",
+        );
+        console.log(
+          "ℹ️ User can still enable camera in Daily controls if they want",
+        );
+        setUseCameraChoice(true); // Still try to join with camera enabled - Daily will handle it
+        setShowPermissionDialog(false);
+        setIsJoining(true);
+      }
     }
   };
 
@@ -98,6 +127,19 @@ export function DailyVideoChat({
       return;
     }
 
+    // WAIT FOR ROOM URL TO ARRIVE!
+    if (!roomUrl) {
+      console.log("⏳ Waiting for room URL to arrive...");
+      return;
+    }
+
+    // Use ref to prevent double initialization across effect runs
+    if (isInitializingRef.current) {
+      console.log("⚠️ Already initializing (via ref), skipping...");
+      return;
+    }
+    isInitializingRef.current = true;
+
     let isMounted = true;
     const shouldIgnoreLeaveRef = { current: false };
 
@@ -113,7 +155,9 @@ export function DailyVideoChat({
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
 
-      if (!isMounted || !containerRef.current) return;
+      if (!isMounted || !containerRef.current) {
+        return;
+      }
 
       // Create Daily call frame
       const callFrame = DailyIframe.createFrame(containerRef.current, {
@@ -132,9 +176,39 @@ export function DailyVideoChat({
 
       callFrameRef.current = callFrame;
 
+      // COMPREHENSIVE LOGGING FOR ALL DAILY EVENTS
+      console.log("🎯 Setting up Daily event listeners...");
+
+      // Track if we've seen critical events (fallback for hung joined-meeting)
+      let hasSeenStartedCamera = false;
+      let hasSeenPlayableVideo = false;
+
+      // Fallback timeout to force join if Daily hangs
+      const fallbackTimeout = setTimeout(() => {
+        if (
+          !hasJoinedRef.current &&
+          (hasSeenStartedCamera || hasSeenPlayableVideo)
+        ) {
+          console.warn(
+            "⚠️ FALLBACK: joined-meeting never fired, but we have camera/video!",
+          );
+          console.warn("⚠️ FALLBACK: Forcing join state...");
+          hasJoinedRef.current = true;
+          if (isMounted) {
+            setIsJoining(false);
+          }
+        } else if (!hasJoinedRef.current) {
+          console.error(
+            "❌ TIMEOUT: Neither joined-meeting nor started-camera fired after 10s",
+          );
+        }
+      }, 10000); // 10 second timeout
+
       // Handle successful join
       callFrame.on("joined-meeting", () => {
+        console.log("✅ ========== JOINED-MEETING EVENT FIRED ==========");
         console.log("✅ Successfully joined meeting!");
+        clearTimeout(fallbackTimeout);
         hasJoinedRef.current = true;
 
         // If user chose no camera, explicitly disable it
@@ -156,15 +230,29 @@ export function DailyVideoChat({
 
       // Handle leave button
       callFrame.on("left-meeting", () => {
+        console.log("👋 LEFT-MEETING event fired");
         if (!shouldIgnoreLeaveRef.current && hasJoinedRef.current) {
           console.log("👋 User left meeting");
-          onLeave();
+          onLeaveRef.current();
         }
       });
 
-      // Handle camera errors from Daily
+      // ADDITIONAL DAILY EVENTS FOR DEBUGGING
+      callFrame.on("loading", (event) => {
+        console.log("⏳ LOADING event:", event);
+      });
+
+      callFrame.on("loaded", (event) => {
+        console.log("📦 LOADED event:", event);
+      });
+
+      callFrame.on("started-camera", (event) => {
+        console.log("📹 STARTED-CAMERA event:", event);
+        hasSeenStartedCamera = true;
+      });
+
       callFrame.on("camera-error", (event: DailyEventObjectCameraError) => {
-        console.log("📷 Camera error from Daily:", event);
+        console.log("📷 CAMERA-ERROR event:", event);
         // Only show error if user actually wanted to use camera
         if (useCameraChoice) {
           console.error("❌ Camera error for user who wanted camera");
@@ -176,10 +264,52 @@ export function DailyVideoChat({
         }
       });
 
-      // Handle general errors
-      callFrame.on("error", (event) => {
-        console.error("❌ Daily error:", event);
+      callFrame.on("joining-meeting", (event) => {
+        console.log("🚪 JOINING-MEETING event:", event);
       });
+
+      callFrame.on("error", (event) => {
+        console.error("❌ ERROR event:", event);
+      });
+
+      callFrame.on("nonfatal-error", (event) => {
+        console.warn("⚠️ NONFATAL-ERROR event:", event);
+      });
+
+      // ADD MORE EVENTS TO CATCH WHAT'S BLOCKING
+      callFrame.on("participant-joined", (event) => {
+        console.log("👤 PARTICIPANT-JOINED event:", event);
+      });
+
+      callFrame.on("participant-updated", (event) => {
+        console.log("👤 PARTICIPANT-UPDATED event:", event);
+        console.log(
+          "👤 PARTICIPANT DATA:",
+          JSON.stringify(event.participant, null, 2),
+        );
+      });
+
+      callFrame.on("access-state-updated", (event) => {
+        console.log("🔐 ACCESS-STATE-UPDATED event:", event);
+        console.log("🔐 ACCESS STATE:", JSON.stringify(event.access, null, 2));
+      });
+
+      callFrame.on("meeting-session-state-updated", (event) => {
+        console.log("🏢 MEETING-SESSION-STATE-UPDATED event:", event);
+      });
+
+      callFrame.on("track-started", (event) => {
+        console.log("🎵 TRACK-STARTED event:", event);
+        if (event.track.kind === "video") {
+          hasSeenPlayableVideo = true;
+        }
+      });
+
+      callFrame.on("track-stopped", (event) => {
+        console.log("🛑 TRACK-STOPPED event:", event);
+      });
+
+      console.log("✅ All Daily event listeners attached");
 
       try {
         console.log("🚀 Joining Daily room...");
@@ -251,11 +381,13 @@ export function DailyVideoChat({
 
     initializeCall();
 
-    // Cleanup - only run on unmount, not when isJoining changes
+    // Cleanup - only run on unmount
     return () => {
+      console.log("🧹 useEffect cleanup triggered");
       isMounted = false;
       shouldIgnoreLeaveRef.current = true;
       hasJoinedRef.current = false;
+      isInitializingRef.current = false; // Reset for next time
 
       if (callFrameRef.current) {
         console.log("🧹 Cleaning up Daily instance");
@@ -263,9 +395,9 @@ export function DailyVideoChat({
         callFrameRef.current = null;
       }
     };
-    // Note: isJoining is intentionally excluded - we don't want to re-run when it changes to false
+    // REMOVED onLeave from dependencies - using ref instead
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useCameraChoice, roomUrl, userName, onLeave]);
+  }, [useCameraChoice, roomUrl, userName]);
 
   return (
     <>
