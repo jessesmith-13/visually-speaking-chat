@@ -366,8 +366,45 @@ export function DailyVideoChat({
           JSON.stringify(event.participant, null, 2),
         );
 
-        // Check if this is our own participant
-        if (event.participant.user_name === userName) {
+        // Check if this is our own participant joining for the first time
+        if (
+          event.participant.local &&
+          event.participant.user_name === userName &&
+          !hasJoinedRef.current
+        ) {
+          addDebugLog(
+            "✅ ========== LOCAL PARTICIPANT DETECTED - WE'RE IN! ==========",
+          );
+          hasSeenLocalParticipant = true;
+
+          // Clear the timeout since we know we're in now
+          clearTimeout(fallbackTimeout);
+          hasJoinedRef.current = true;
+
+          // Hide joining state
+          if (isMounted) {
+            setIsJoining(false);
+          }
+
+          // Enable camera if user wanted it
+          if (useCameraChoice && callFrameRef.current) {
+            addDebugLog("📹 Enabling camera now...");
+            setTimeout(async () => {
+              if (callFrameRef.current && isMounted) {
+                try {
+                  await callFrameRef.current.setLocalVideo(true);
+                  addDebugLog("✅ Camera enabled successfully!");
+                } catch (err) {
+                  addDebugLog("❌ Failed to enable camera:", err);
+                  if (isMounted) {
+                    setShowCameraError(true);
+                    setDebugError(`Failed to enable camera: ${err}`);
+                  }
+                }
+              }
+            }, 300);
+          }
+        } else if (event.participant.user_name === userName) {
           hasSeenLocalParticipant = true;
         }
       });
