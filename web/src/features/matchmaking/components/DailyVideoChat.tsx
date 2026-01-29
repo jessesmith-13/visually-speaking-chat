@@ -42,19 +42,10 @@ export function DailyVideoChat({
   const [isJoining, setIsJoining] = useState(false);
   const [useCameraChoice, setUseCameraChoice] = useState<boolean | null>(null);
   const [debugError, setDebugError] = useState<string>(""); // VISIBLE ERROR FOR DEBUGGING
-  const [debugLogs, setDebugLogs] = useState<string[]>([]); // VISIBLE LOGS FOR MOBILE DEBUGGING!
 
-  // Helper to add visible logs
+  // Helper to add logs (console only, no visible logs anymore)
   const addDebugLog = (...args: unknown[]) => {
-    const timestamp = new Date().toLocaleTimeString();
-    const message = args
-      .map((arg) =>
-        typeof arg === "object" ? JSON.stringify(arg) : String(arg),
-      )
-      .join(" ");
-    const logMessage = `[${timestamp}] ${message}`;
-    console.log(...args); // Still log to console with original formatting
-    setDebugLogs((prev) => [...prev.slice(-20), logMessage]); // Keep last 20 logs
+    console.log(...args);
   };
 
   // Handle user choosing to join with camera
@@ -512,31 +503,6 @@ export function DailyVideoChat({
           className="absolute inset-0 bg-gray-900 rounded-lg"
         />
 
-        {/* VISIBLE DEBUG LOGS FOR MOBILE - SHOWS ON SCREEN! */}
-        {debugLogs.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 max-h-[40vh] overflow-y-auto bg-black/90 text-white text-xs font-mono p-3 z-50 border-t-2 border-cyan-500">
-            <div className="flex justify-between items-center mb-2 sticky top-0 bg-black/90 pb-2">
-              <strong className="text-cyan-400">
-                DEBUG LOGS (Mobile Visible)
-              </strong>
-              <button
-                onClick={() => setDebugLogs([])}
-                className="text-red-400 hover:text-red-300 text-xs"
-              >
-                Clear
-              </button>
-            </div>
-            {debugLogs.map((log, i) => (
-              <div
-                key={i}
-                className="py-1 border-b border-gray-800 break-words"
-              >
-                {log}
-              </div>
-            ))}
-          </div>
-        )}
-
         {/* Show loading overlay while joining */}
         {isJoining && (
           <div className="absolute inset-0 bg-gray-900 flex items-center justify-center z-50 rounded-lg">
@@ -560,44 +526,44 @@ export function DailyVideoChat({
         open={showPermissionDialog}
         onOpenChange={setShowPermissionDialog}
       >
-        <DialogContent className="sm:max-w-md bg-gray-800 border-gray-700 text-white max-h-[90vh] overflow-y-auto">
-          <div className="space-y-6">
+        <DialogContent className="sm:max-w-md bg-gray-800 border-gray-700 text-white max-h-[90vh] overflow-y-auto p-6 sm:p-8">
+          <div className="space-y-6 sm:space-y-8">
             <div className="flex justify-center">
-              <div className="bg-cyan-500/20 p-6 rounded-full">
-                <Video className="size-16 text-cyan-400" />
+              <div className="bg-cyan-500/20 p-5 sm:p-6 rounded-full">
+                <Video className="size-12 sm:size-16 text-cyan-400" />
               </div>
             </div>
 
-            <div className="space-y-3 text-center">
-              <DialogTitle className="text-2xl font-semibold text-white">
+            <div className="space-y-2 sm:space-y-3 text-center px-2">
+              <DialogTitle className="text-xl sm:text-2xl font-semibold text-white">
                 Ready to Connect?
               </DialogTitle>
-              <DialogDescription className="text-base text-gray-300">
+              <DialogDescription className="text-sm sm:text-base text-gray-300 leading-relaxed">
                 Choose how you'd like to join this video chat
               </DialogDescription>
             </div>
 
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-3 sm:gap-4">
               <Button
                 onClick={handleJoinWithCamera}
-                className="w-full bg-cyan-500 hover:bg-cyan-600 text-white h-14 text-base font-medium"
+                className="w-full bg-cyan-500 hover:bg-cyan-600 text-white h-12 sm:h-14 text-base sm:text-lg font-medium"
                 size="lg"
               >
-                <Camera className="size-6 mr-3" />
+                <Camera className="size-5 sm:size-6 mr-2 sm:mr-3" />
                 Join With Camera
               </Button>
 
               <Button
                 onClick={handleJoinWithoutCamera}
                 variant="outline"
-                className="w-full border-gray-600 hover:bg-gray-700 text-white h-14 text-base font-medium bg-transparent"
+                className="w-full border-gray-600 hover:bg-gray-700 text-white h-12 sm:h-14 text-base sm:text-lg font-medium bg-transparent"
                 size="lg"
               >
-                <CameraOff className="size-6 mr-3" />
+                <CameraOff className="size-5 sm:size-6 mr-2 sm:mr-3" />
                 Join Without Camera
               </Button>
 
-              <p className="text-xs text-gray-400 text-center mt-2">
+              <p className="text-xs sm:text-sm text-gray-400 text-center mt-2 px-4">
                 You can enable your camera later using the video controls
               </p>
             </div>
