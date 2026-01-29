@@ -331,7 +331,6 @@ export function DailyVideoChat({
           url: roomUrl,
           userName: userName,
           startVideoOff: true, // ALWAYS start with video off
-          startAudioOff: true,
         };
 
         console.log("⚙️ Join config:", joinConfig);
