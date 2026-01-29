@@ -30,7 +30,7 @@ import { withCors } from "../_shared/response.ts";
 let stripe: Stripe | null = null;
 if (STRIPE_SECRET_KEY) {
   stripe = new Stripe(STRIPE_SECRET_KEY, {
-    apiVersion: "2023-10-16",
+    apiVersion: "2025-11-17.clover",
     httpClient: Stripe.createFetchHttpClient(),
   });
 }

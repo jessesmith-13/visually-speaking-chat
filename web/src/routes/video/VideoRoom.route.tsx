@@ -321,24 +321,6 @@ export function VideoRoomRoute() {
     setPermissionError("");
 
     try {
-      // Request camera permission first (especially important for mobile)
-      console.log("📹 Requesting camera permission...");
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false, // No audio for deaf/HOH events
-        });
-
-        // Stop the stream immediately - we just needed to get permission
-        stream.getTracks().forEach((track) => track.stop());
-        console.log("✅ Camera permission granted");
-      } catch (permError) {
-        console.error("❌ Camera permission denied:", permError);
-        throw new Error(
-          "Camera access is required to join video chat. Please allow camera access in your browser settings.",
-        );
-      }
-
       console.log("📋 Joining matchmaking queue...");
       await matchmaking.joinQueue(currentEvent.id);
       setMatchStatus("searching");
@@ -359,9 +341,9 @@ export function VideoRoomRoute() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white overflow-x-hidden">
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
       {/* Header */}
-      <div className="bg-gray-800 border-b border-gray-700">
+      <div className="bg-gray-800 border-b border-gray-700 flex-shrink-0">
         <div className="w-full px-2 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-0">
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
@@ -402,157 +384,160 @@ export function VideoRoomRoute() {
         </div>
       </div>
 
-      {/* Video Area */}
-      <div className="w-full px-2 sm:px-4 py-4 sm:py-8 max-w-6xl mx-auto">
-        {matchStatus === "searching" && (
-          <div className="mb-4 p-4 bg-blue-900/50 border border-blue-700 rounded-lg">
-            <div className="flex items-start gap-3">
-              <Loader2 className="size-5 text-blue-400 mt-0.5 flex-shrink-0 animate-spin" />
-              <div>
-                <p className="text-blue-200 font-medium mb-1">
-                  Searching for a partner...
-                </p>
-                <p className="text-blue-300 text-sm">
-                  We're matching you with someone right now. This usually takes
-                  just a few seconds!
-                </p>
+      {/* Video Area - Scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="w-full px-2 sm:px-4 py-4 sm:py-8 max-w-6xl mx-auto">
+          {matchStatus === "searching" && (
+            <div className="mb-4 p-4 bg-blue-900/50 border border-blue-700 rounded-lg">
+              <div className="flex items-start gap-3">
+                <Loader2 className="size-5 text-blue-400 mt-0.5 flex-shrink-0 animate-spin" />
+                <div>
+                  <p className="text-blue-200 font-medium mb-1">
+                    Searching for a partner...
+                  </p>
+                  <p className="text-blue-300 text-sm">
+                    We're matching you with someone right now. This usually
+                    takes just a few seconds!
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Video Container */}
-        <div className="mb-8">
-          <Card className="bg-gray-800 border-gray-700">
-            <CardContent className="p-0">
-              <div
-                className={`relative aspect-video bg-gray-900 rounded-lg ${
-                  matchStatus === "matched" && dailyUrl
-                    ? "overflow-hidden"
-                    : "overflow-visible"
-                }`}
-              >
-                {matchStatus === "not_started" ? (
-                  <div className="absolute inset-0 flex items-center justify-center p-4">
-                    <div className="text-center max-w-md w-full">
-                      <Users className="size-12 sm:size-16 text-gray-600 mx-auto mb-3 sm:mb-4" />
-                      <h3 className="text-lg sm:text-xl font-semibold mb-2">
-                        Ready to Connect?
-                      </h3>
-                      <p className="text-sm sm:text-base text-gray-400 mb-4 sm:mb-6">
-                        Click the button below to start meeting other attendees
-                        through random video chat pairings.
-                      </p>
-                      {permissionError && (
-                        <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-900/50 border border-red-700 rounded-lg text-xs sm:text-sm text-red-200">
-                          {permissionError}
-                        </div>
-                      )}
-                      <Button
-                        size="lg"
-                        onClick={handleStartMatching}
-                        disabled={isJoining}
-                        className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
-                      >
-                        {isJoining ? (
-                          <>
-                            <Loader2 className="size-5 mr-2 animate-spin" />
-                            Joining Queue...
-                          </>
-                        ) : (
-                          "Start Matching"
+          {/* Video Container */}
+          <div className="mb-8">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardContent className="p-0">
+                <div
+                  className={`relative aspect-video bg-gray-900 rounded-lg overflow-hidden`}
+                >
+                  {matchStatus === "not_started" ? (
+                    <div className="absolute inset-0 flex items-center justify-center p-4">
+                      <div className="text-center max-w-md w-full">
+                        <Users className="size-12 sm:size-16 text-gray-600 mx-auto mb-3 sm:mb-4" />
+                        <h3 className="text-lg sm:text-xl font-semibold mb-2">
+                          Ready to Connect?
+                        </h3>
+                        <p className="text-sm sm:text-base text-gray-400 mb-4 sm:mb-6">
+                          Click the button below to start meeting other
+                          attendees through random video chat pairings.
+                        </p>
+                        {permissionError && (
+                          <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-900/50 border border-red-700 rounded-lg text-xs sm:text-sm text-red-200">
+                            {permissionError}
+                          </div>
                         )}
-                      </Button>
+                        <Button
+                          size="lg"
+                          onClick={handleStartMatching}
+                          disabled={isJoining}
+                          className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+                        >
+                          {isJoining ? (
+                            <>
+                              <Loader2 className="size-5 mr-2 animate-spin" />
+                              Joining Queue...
+                            </>
+                          ) : (
+                            "Start Matching"
+                          )}
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                ) : matchStatus === "searching" ? (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <div className="text-center">
-                      <Loader2 className="size-12 text-blue-500 mx-auto mb-4 animate-spin" />
-                      <p className="text-gray-400">Finding your match...</p>
-                    </div>
-                  </div>
-                ) : matchStatus === "matched" ? (
-                  dailyUrl ? (
-                    <DailyVideoChat
-                      roomUrl={dailyUrl}
-                      userName={user.name}
-                      onLeave={handleLeave}
-                      onNext={handleNext}
-                    />
-                  ) : (
+                  ) : matchStatus === "searching" ? (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="text-center">
                         <Loader2 className="size-12 text-blue-500 mx-auto mb-4 animate-spin" />
-                        <p className="text-gray-400">Creating video room...</p>
+                        <p className="text-gray-400">Finding your match...</p>
                       </div>
                     </div>
-                  )
-                ) : null}
+                  ) : matchStatus === "matched" ? (
+                    dailyUrl ? (
+                      <DailyVideoChat
+                        roomUrl={dailyUrl}
+                        userName={user.name}
+                        onLeave={handleLeave}
+                        onNext={handleNext}
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="text-center">
+                          <Loader2 className="size-12 text-blue-500 mx-auto mb-4 animate-spin" />
+                          <p className="text-gray-400">
+                            Creating video room...
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  ) : null}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Controls - Only show when matched and in call */}
+          {matchStatus === "matched" && dailyUrl && (
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-4">
+              <Button
+                size="lg"
+                variant="default"
+                onClick={handleNext}
+                className="w-full sm:w-auto h-12 sm:h-14 px-6 sm:px-8"
+              >
+                <SkipForward className="size-5 sm:size-6 mr-2" />
+                Next Partner
+              </Button>
+
+              <Button
+                size="lg"
+                variant="destructive"
+                onClick={handleLeave}
+                className="w-full sm:w-auto h-12 sm:h-14 sm:w-14 sm:rounded-full"
+              >
+                <PhoneOff className="size-5 sm:size-6" />
+                <span className="sm:hidden ml-2">Leave Event</span>
+              </Button>
+            </div>
+          )}
+
+          {/* Info Card */}
+          <Card className="mt-8 bg-gray-800 border-gray-700 max-w-2xl mx-auto">
+            <CardContent className="pt-6 px-4">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-semibold mb-2 text-sm sm:text-base">
+                    How it works:
+                  </h3>
+                  <ul className="text-xs sm:text-sm text-gray-300 space-y-1">
+                    <li>• Click "Start Matching" to join the queue</li>
+                    <li>
+                      • You'll be randomly paired with another event attendee
+                    </li>
+                    <li>
+                      • Both participants join the same video room automatically
+                    </li>
+                    <li>
+                      • Click "Next Partner" to be matched with someone new
+                    </li>
+                    <li>
+                      • Use the controls in the video window to toggle
+                      camera/mic
+                    </li>
+                    <li>• Click the red phone icon to leave the event</li>
+                  </ul>
+                </div>
+                <div className="border-t border-gray-700 pt-4">
+                  <p className="text-xs sm:text-sm text-gray-400">
+                    <strong>Note:</strong> Video calls are powered by Daily.co
+                    for reliable, high-quality connections. The matchmaking
+                    system pairs you randomly with other attendees who have
+                    purchased tickets to this event.
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Controls - Only show when matched and in call */}
-        {matchStatus === "matched" && dailyUrl && (
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-4">
-            <Button
-              size="lg"
-              variant="default"
-              onClick={handleNext}
-              className="w-full sm:w-auto h-12 sm:h-14 px-6 sm:px-8"
-            >
-              <SkipForward className="size-5 sm:size-6 mr-2" />
-              Next Partner
-            </Button>
-
-            <Button
-              size="lg"
-              variant="destructive"
-              onClick={handleLeave}
-              className="w-full sm:w-auto h-12 sm:h-14 sm:w-14 sm:rounded-full"
-            >
-              <PhoneOff className="size-5 sm:size-6" />
-              <span className="sm:hidden ml-2">Leave Event</span>
-            </Button>
-          </div>
-        )}
-
-        {/* Info Card */}
-        <Card className="mt-8 bg-gray-800 border-gray-700 max-w-2xl mx-auto">
-          <CardContent className="pt-6 px-4">
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold mb-2 text-sm sm:text-base">
-                  How it works:
-                </h3>
-                <ul className="text-xs sm:text-sm text-gray-300 space-y-1">
-                  <li>• Click "Start Matching" to join the queue</li>
-                  <li>
-                    • You'll be randomly paired with another event attendee
-                  </li>
-                  <li>
-                    • Both participants join the same video room automatically
-                  </li>
-                  <li>• Click "Next Partner" to be matched with someone new</li>
-                  <li>
-                    • Use the controls in the video window to toggle camera/mic
-                  </li>
-                  <li>• Click the red phone icon to leave the event</li>
-                </ul>
-              </div>
-              <div className="border-t border-gray-700 pt-4">
-                <p className="text-xs sm:text-sm text-gray-400">
-                  <strong>Note:</strong> Video calls are powered by Daily.co for
-                  reliable, high-quality connections. The matchmaking system
-                  pairs you randomly with other attendees who have purchased
-                  tickets to this event.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
