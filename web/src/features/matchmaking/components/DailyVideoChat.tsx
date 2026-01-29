@@ -169,27 +169,59 @@ export function DailyVideoChat({
       // Track if we've seen critical events (fallback for hung joined-meeting)
       let hasSeenStartedCamera = false;
       let hasSeenPlayableVideo = false;
+      let hasSeenLocalParticipant = false; // NEW: Track if we've seen our own participant
 
       // Fallback timeout to force join if Daily hangs
       const fallbackTimeout = setTimeout(() => {
         if (
           !hasJoinedRef.current &&
-          (hasSeenStartedCamera || hasSeenPlayableVideo)
+          (hasSeenStartedCamera ||
+            hasSeenPlayableVideo ||
+            hasSeenLocalParticipant)
         ) {
           console.warn(
-            "⚠️ FALLBACK: joined-meeting never fired, but we have camera/video!",
+            "⚠️ FALLBACK: joined-meeting never fired, but we have participant/camera/video!",
           );
           console.warn("⚠️ FALLBACK: Forcing join state...");
           hasJoinedRef.current = true;
           if (isMounted) {
             setIsJoining(false);
           }
+
+          // Enable camera now if user wanted it
+          if (useCameraChoice && callFrameRef.current) {
+            console.log("📹 FALLBACK: Enabling camera now...");
+            setTimeout(async () => {
+              if (callFrameRef.current && isMounted) {
+                try {
+                  await callFrameRef.current.setLocalVideo(true);
+                  console.log("✅ FALLBACK: Camera enabled!");
+                } catch (err) {
+                  console.error("❌ FALLBACK: Failed to enable camera:", err);
+                  if (isMounted) {
+                    setShowCameraError(true);
+                    setDebugError(`Failed to enable camera: ${err}`);
+                  }
+                }
+              }
+            }, 500);
+          }
         } else if (!hasJoinedRef.current) {
+          console.error("❌ TIMEOUT: No join indicators fired after 10s");
           console.error(
-            "❌ TIMEOUT: Neither joined-meeting nor started-camera fired after 10s",
+            "❌ TIMEOUT: hasSeenLocalParticipant:",
+            hasSeenLocalParticipant,
+          );
+          console.error(
+            "❌ TIMEOUT: hasSeenStartedCamera:",
+            hasSeenStartedCamera,
+          );
+          console.error(
+            "❌ TIMEOUT: hasSeenPlayableVideo:",
+            hasSeenPlayableVideo,
           );
         }
-      }, 10000); // 10 second timeout
+      }, 3000); // REDUCED to 3 seconds since we have better fallback
 
       // Handle successful join
       callFrame.on("joined-meeting", () => {
@@ -296,6 +328,11 @@ export function DailyVideoChat({
           "👤 PARTICIPANT DATA:",
           JSON.stringify(event.participant, null, 2),
         );
+
+        // Check if this is our own participant
+        if (event.participant.user_name === userName) {
+          hasSeenLocalParticipant = true;
+        }
       });
 
       callFrame.on("access-state-updated", (event) => {
