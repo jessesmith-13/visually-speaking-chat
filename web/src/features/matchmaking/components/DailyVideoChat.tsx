@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import DailyIframe, {
   DailyCall,
   DailyEventObjectCameraError,
+  DailyCallOptions,
 } from "@daily-co/daily-js";
 import { Button } from "@/ui/button";
 import {
@@ -131,6 +132,28 @@ export function DailyVideoChat({
 
       callFrameRef.current = callFrame;
 
+      // Handle successful join
+      callFrame.on("joined-meeting", () => {
+        console.log("✅ Successfully joined meeting!");
+        hasJoinedRef.current = true;
+
+        // If user chose no camera, explicitly disable it
+        if (!useCameraChoice && callFrameRef.current) {
+          console.log("📹 Ensuring camera is off...");
+          try {
+            callFrameRef.current.setLocalVideo(false);
+            console.log("✅ Camera disabled");
+          } catch (err) {
+            console.log("ℹ️ Could not disable camera (already off):", err);
+          }
+        }
+
+        // Hide joining state
+        if (isMounted) {
+          setIsJoining(false);
+        }
+      });
+
       // Handle leave button
       callFrame.on("left-meeting", () => {
         if (!shouldIgnoreLeaveRef.current && hasJoinedRef.current) {
@@ -141,11 +164,15 @@ export function DailyVideoChat({
 
       // Handle camera errors from Daily
       callFrame.on("camera-error", (event: DailyEventObjectCameraError) => {
-        console.error("📷 Camera error from Daily:", event);
+        console.log("📷 Camera error from Daily:", event);
+        // Only show error if user actually wanted to use camera
         if (useCameraChoice) {
-          // Only show error if user wanted to use camera
+          console.error("❌ Camera error for user who wanted camera");
           setIsJoining(false);
           setShowCameraError(true);
+        } else {
+          // User didn't want camera anyway - this error is expected and harmless
+          console.log("ℹ️ Camera error ignored (user chose no camera)");
         }
       });
 
@@ -156,42 +183,75 @@ export function DailyVideoChat({
 
       try {
         console.log("🚀 Joining Daily room...");
+        console.log("📹 Camera setting:", useCameraChoice);
+        console.log("🔗 Room URL:", roomUrl);
+        console.log("👤 User name:", userName);
 
-        // Join with or without camera based on user choice
-        await callFrame.join({
-          url: roomUrl,
-          userName: userName,
-          videoSource: useCameraChoice ? true : false, // true = use camera, false = no camera
-          audioSource: false, // No audio for deaf/HOH
-          startVideoOff: !useCameraChoice, // Start with video off if no camera chosen
-          startAudioOff: true,
+        // Join configuration - Different approach based on camera choice
+        let joinConfig: DailyCallOptions;
+
+        if (useCameraChoice) {
+          // User wants camera - request it explicitly
+          joinConfig = {
+            url: roomUrl,
+            userName: userName,
+            startVideoOff: false,
+            startAudioOff: true,
+          };
+        } else {
+          // User doesn't want camera - DON'T mention video at all
+          joinConfig = {
+            url: roomUrl,
+            userName: userName,
+            startAudioOff: true,
+          };
+        }
+
+        console.log("⚙️ Join config:", joinConfig);
+
+        // Call join - don't wait for the promise, rely on 'joined-meeting' event instead
+        // This prevents hanging when there are camera permission issues
+        callFrame.join(joinConfig).catch((error) => {
+          console.error("❌ Join promise rejected:", error);
+
+          // Check if it's a camera-related error
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
+          if (
+            useCameraChoice &&
+            (errorMessage.toLowerCase().includes("camera") ||
+              errorMessage.toLowerCase().includes("video") ||
+              errorMessage.toLowerCase().includes("permission") ||
+              errorMessage.toLowerCase().includes("notfound"))
+          ) {
+            if (isMounted) {
+              setIsJoining(false);
+              setShowCameraError(true);
+            }
+          } else {
+            // For non-camera errors that truly prevent joining, show alert
+            if (isMounted) {
+              setIsJoining(false);
+              alert(`Failed to join video chat: ${errorMessage}`);
+            }
+          }
         });
 
-        console.log("✅ Joined Daily room successfully!");
-        hasJoinedRef.current = true;
-        setIsJoining(false);
+        console.log("📡 Join called, waiting for 'joined-meeting' event...");
       } catch (error) {
-        console.error("❌ Failed to join Daily room:", error);
-        setIsJoining(false);
-
-        // Check if it's a camera-related error
-        const errorMessage =
-          error instanceof Error ? error.message : String(error);
-        if (
-          useCameraChoice &&
-          (errorMessage.toLowerCase().includes("camera") ||
-            errorMessage.toLowerCase().includes("video") ||
-            errorMessage.toLowerCase().includes("permission") ||
-            errorMessage.toLowerCase().includes("notfound"))
-        ) {
-          setShowCameraError(true);
+        console.error("❌ Exception calling join():", error);
+        if (isMounted) {
+          setIsJoining(false);
+          alert(
+            `Failed to join video chat: ${error instanceof Error ? error.message : String(error)}`,
+          );
         }
       }
     };
 
     initializeCall();
 
-    // Cleanup
+    // Cleanup - only run on unmount, not when isJoining changes
     return () => {
       isMounted = false;
       shouldIgnoreLeaveRef.current = true;
@@ -203,7 +263,9 @@ export function DailyVideoChat({
         callFrameRef.current = null;
       }
     };
-  }, [isJoining, useCameraChoice, roomUrl, userName, onLeave]);
+    // Note: isJoining is intentionally excluded - we don't want to re-run when it changes to false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useCameraChoice, roomUrl, userName, onLeave]);
 
   return (
     <>
