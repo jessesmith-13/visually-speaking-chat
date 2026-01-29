@@ -42,25 +42,51 @@ export function DailyVideoChat({
   const [isJoining, setIsJoining] = useState(false);
   const [useCameraChoice, setUseCameraChoice] = useState<boolean | null>(null);
   const [debugError, setDebugError] = useState<string>(""); // VISIBLE ERROR FOR DEBUGGING
+  const [debugLogs, setDebugLogs] = useState<string[]>([]); // VISIBLE LOGS FOR MOBILE DEBUGGING!
+
+  // Helper to add visible logs
+  const addDebugLog = (...args: unknown[]) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const message = args
+      .map((arg) =>
+        typeof arg === "object" ? JSON.stringify(arg) : String(arg),
+      )
+      .join(" ");
+    const logMessage = `[${timestamp}] ${message}`;
+    console.log(...args); // Still log to console with original formatting
+    setDebugLogs((prev) => [...prev.slice(-20), logMessage]); // Keep last 20 logs
+  };
 
   // Handle user choosing to join with camera
   const handleJoinWithCamera = async () => {
-    console.log("✅ User chose: Join WITH Camera");
+    addDebugLog("═══════════════════════════════════════════════════════");
+    addDebugLog("✅ USER ACTION: Join WITH Camera");
+    addDebugLog("📱 User agent:", navigator.userAgent);
+    addDebugLog("📱 Platform:", navigator.platform);
+    addDebugLog(
+      "📱 Is mobile:",
+      /iPhone|iPad|iPod|Android/i.test(navigator.userAgent),
+    );
+    addDebugLog("═══════════════════════════════════════════════════════");
 
     // DON'T pre-check camera - just let Daily handle it!
     // The pre-check was causing a race condition where the browser
     // wouldn't update permission state in time for Daily
-    console.log("📹 Skipping pre-check, letting Daily handle camera directly");
+    addDebugLog("📹 Skipping pre-check, letting Daily handle camera directly");
     setDebugError("Step 1: Starting Daily with camera enabled..."); // VISIBLE DEBUG
 
     setUseCameraChoice(true);
     setShowPermissionDialog(false);
     setIsJoining(true);
+
+    addDebugLog(
+      "🎬 STATE UPDATE: useCameraChoice=true, showPermissionDialog=false, isJoining=true",
+    );
   };
 
   // Handle retry after camera error
   const handleRetryCamera = async () => {
-    console.log("🔄 Retrying camera permission...");
+    addDebugLog("🔄 Retrying camera permission...");
 
     // Close error dialog immediately
     setShowCameraError(false);
@@ -68,19 +94,19 @@ export function DailyVideoChat({
 
     // Try to enable camera on existing call frame
     if (callFrameRef.current) {
-      console.log("📹 Attempting to enable camera on existing call...");
+      addDebugLog("📹 Attempting to enable camera on existing call...");
       try {
         await callFrameRef.current.setLocalVideo(true);
-        console.log("✅ Camera enabled successfully!");
+        addDebugLog("✅ Camera enabled successfully!");
         setIsJoining(false);
       } catch (err) {
-        console.error("❌ Failed to enable camera:", err);
+        addDebugLog("❌ Failed to enable camera:", err);
         setDebugError(`Failed to enable camera: ${err}`);
         setIsJoining(false);
         setShowCameraError(true);
       }
     } else {
-      console.log("⚠️ No call frame exists, re-initializing...");
+      addDebugLog("⚠️ No call frame exists, re-initializing...");
       // Reset and re-initialize
       isInitializingRef.current = false;
       hasJoinedRef.current = false;
@@ -96,7 +122,7 @@ export function DailyVideoChat({
 
   // Handle user choosing to join without camera
   const handleJoinWithoutCamera = () => {
-    console.log("✅ User chose: Join WITHOUT Camera");
+    addDebugLog("✅ User chose: Join WITHOUT Camera");
     setUseCameraChoice(false);
     setShowPermissionDialog(false);
     setShowCameraError(false);
@@ -111,13 +137,13 @@ export function DailyVideoChat({
 
     // WAIT FOR ROOM URL TO ARRIVE!
     if (!roomUrl) {
-      console.log("⏳ Waiting for room URL to arrive...");
+      addDebugLog("⏳ Waiting for room URL to arrive...");
       return;
     }
 
     // Use ref to prevent double initialization across effect runs
     if (isInitializingRef.current) {
-      console.log("⚠️ Already initializing (via ref), skipping...");
+      addDebugLog("⚠️ Already initializing (via ref), skipping...");
       return;
     }
     isInitializingRef.current = true;
@@ -126,13 +152,13 @@ export function DailyVideoChat({
     const shouldIgnoreLeaveRef = { current: false };
 
     const initializeCall = async () => {
-      console.log("🎥 Initializing Daily.co...");
-      console.log("📹 Use camera:", useCameraChoice);
+      addDebugLog("🎥 Initializing Daily.co...");
+      addDebugLog("📹 Use camera:", useCameraChoice);
 
       // Destroy any existing instance
       const existingCall = DailyIframe.getCallInstance();
       if (existingCall) {
-        console.log("🧹 Destroying existing Daily instance");
+        addDebugLog("🧹 Destroying existing Daily instance");
         await existingCall.destroy();
         await new Promise((resolve) => setTimeout(resolve, 300));
       }
@@ -159,7 +185,7 @@ export function DailyVideoChat({
       callFrameRef.current = callFrame;
 
       // COMPREHENSIVE LOGGING FOR ALL DAILY EVENTS
-      console.log("🎯 Setting up Daily event listeners...");
+      addDebugLog("🎯 Setting up Daily event listeners...");
 
       // Track if we've seen critical events (fallback for hung joined-meeting)
       let hasSeenStartedCamera = false;
@@ -178,10 +204,10 @@ export function DailyVideoChat({
             hasSeenPlayableVideo ||
             hasSeenLocalParticipant)
         ) {
-          console.warn(
+          addDebugLog(
             "⚠️ FALLBACK: joined-meeting never fired, but we have participant/camera/video!",
           );
-          console.warn("⚠️ FALLBACK: Forcing join state...");
+          addDebugLog("⚠️ FALLBACK: Forcing join state...");
           hasJoinedRef.current = true;
           if (isMounted) {
             setIsJoining(false);
@@ -189,14 +215,14 @@ export function DailyVideoChat({
 
           // Enable camera now if user wanted it
           if (useCameraChoice && callFrameRef.current) {
-            console.log("📹 FALLBACK: Enabling camera now...");
+            addDebugLog("📹 FALLBACK: Enabling camera now...");
             setTimeout(async () => {
               if (callFrameRef.current && isMounted) {
                 try {
                   await callFrameRef.current.setLocalVideo(true);
-                  console.log("✅ FALLBACK: Camera enabled!");
+                  addDebugLog("✅ FALLBACK: Camera enabled!");
                 } catch (err) {
-                  console.error("❌ FALLBACK: Failed to enable camera:", err);
+                  addDebugLog("❌ FALLBACK: Failed to enable camera:", err);
                   if (isMounted) {
                     setShowCameraError(true);
                     setDebugError(`Failed to enable camera: ${err}`);
@@ -206,16 +232,16 @@ export function DailyVideoChat({
             }, 500);
           }
         } else if (!hasJoinedRef.current) {
-          console.error("❌ TIMEOUT: No join indicators fired after 10s");
-          console.error(
+          addDebugLog("❌ TIMEOUT: No join indicators fired after 10s");
+          addDebugLog(
             "❌ TIMEOUT: hasSeenLocalParticipant:",
             hasSeenLocalParticipant,
           );
-          console.error(
+          addDebugLog(
             "❌ TIMEOUT: hasSeenStartedCamera:",
             hasSeenStartedCamera,
           );
-          console.error(
+          addDebugLog(
             "❌ TIMEOUT: hasSeenPlayableVideo:",
             hasSeenPlayableVideo,
           );
@@ -224,8 +250,8 @@ export function DailyVideoChat({
 
       // Handle successful join
       callFrame.on("joined-meeting", () => {
-        console.log("✅ ========== JOINED-MEETING EVENT FIRED ==========");
-        console.log("✅ Successfully joined meeting!");
+        addDebugLog("✅ ========== JOINED-MEETING EVENT FIRED ==========");
+        addDebugLog("✅ Successfully joined meeting!");
         clearTimeout(fallbackTimeout);
         hasJoinedRef.current = true;
 
@@ -236,14 +262,14 @@ export function DailyVideoChat({
 
         // NOW enable camera if user wanted it (after we're already in the call)
         if (useCameraChoice && callFrameRef.current) {
-          console.log("📹 Now enabling camera AFTER join...");
+          addDebugLog("📹 Now enabling camera AFTER join...");
           setTimeout(async () => {
             if (callFrameRef.current && isMounted) {
               try {
                 await callFrameRef.current.setLocalVideo(true);
-                console.log("✅ Camera enabled successfully after join!");
+                addDebugLog("✅ Camera enabled successfully after join!");
               } catch (err) {
-                console.error("❌ Failed to enable camera after join:", err);
+                addDebugLog("❌ Failed to enable camera after join:", err);
                 // Show error if camera enable fails
                 if (isMounted) {
                   setShowCameraError(true);
@@ -255,48 +281,48 @@ export function DailyVideoChat({
             }
           }, 500); // Small delay to ensure join is fully complete
         } else if (!useCameraChoice && callFrameRef.current) {
-          console.log("📹 Ensuring camera stays off...");
+          addDebugLog("📹 Ensuring camera stays off...");
           try {
             callFrameRef.current.setLocalVideo(false);
-            console.log("✅ Camera disabled");
+            addDebugLog("✅ Camera disabled");
           } catch (err) {
-            console.log("ℹ️ Could not disable camera (already off):", err);
+            addDebugLog("ℹ️ Could not disable camera (already off):", err);
           }
         }
       });
 
       // Handle leave button
       callFrame.on("left-meeting", () => {
-        console.log("👋 LEFT-MEETING event fired");
+        addDebugLog("👋 LEFT-MEETING event fired");
         if (!shouldIgnoreLeaveRef.current && hasJoinedRef.current) {
-          console.log("👋 User left meeting");
+          addDebugLog("👋 User left meeting");
           onLeaveRef.current();
         }
       });
 
       // ADDITIONAL DAILY EVENTS FOR DEBUGGING
       callFrame.on("loading", (event) => {
-        console.log("⏳ LOADING event:", event);
+        addDebugLog("⏳ LOADING event:", event);
       });
 
       callFrame.on("loaded", (event) => {
-        console.log("📦 LOADED event:", event);
+        addDebugLog("📦 LOADED event:", event);
       });
 
       callFrame.on("started-camera", (event) => {
-        console.log("📹 STARTED-CAMERA event:", event);
+        addDebugLog("📹 STARTED-CAMERA event:", event);
         hasSeenStartedCamera = true;
       });
 
       callFrame.on("camera-error", (event: DailyEventObjectCameraError) => {
-        console.log("📷 CAMERA-ERROR event:", event);
+        addDebugLog("📷 CAMERA-ERROR event:", event);
 
         const timeSinceJoin = Date.now() - joinStartTime;
-        console.log(`⏱️ Time since join started: ${timeSinceJoin}ms`);
+        addDebugLog(`⏱️ Time since join started: ${timeSinceJoin}ms`);
 
         // IGNORE camera errors during the grace period (user needs time to respond!)
         if (timeSinceJoin < CAMERA_ERROR_GRACE_PERIOD) {
-          console.log(
+          addDebugLog(
             `⏱️ IGNORING camera error (still in ${CAMERA_ERROR_GRACE_PERIOD}ms grace period)`,
           );
           return;
@@ -304,7 +330,7 @@ export function DailyVideoChat({
 
         // Only show error if user actually wanted to use camera
         if (useCameraChoice) {
-          console.error("❌ Camera error for user who wanted camera");
+          addDebugLog("❌ Camera error for user who wanted camera");
           setDebugError(
             `Daily camera-error event: ${JSON.stringify(event.errorMsg)}`,
           ); // ADD DEBUG
@@ -312,30 +338,30 @@ export function DailyVideoChat({
           setShowCameraError(true);
         } else {
           // User didn't want camera anyway - this error is expected and harmless
-          console.log("ℹ️ Camera error ignored (user chose no camera)");
+          addDebugLog("ℹ️ Camera error ignored (user chose no camera)");
         }
       });
 
       callFrame.on("joining-meeting", (event) => {
-        console.log("🚪 JOINING-MEETING event:", event);
+        addDebugLog("🚪 JOINING-MEETING event:", event);
       });
 
       callFrame.on("error", (event) => {
-        console.error("❌ ERROR event:", event);
+        addDebugLog("❌ ERROR event:", event);
       });
 
       callFrame.on("nonfatal-error", (event) => {
-        console.warn("⚠️ NONFATAL-ERROR event:", event);
+        addDebugLog("⚠️ NONFATAL-ERROR event:", event);
       });
 
       // ADD MORE EVENTS TO CATCH WHAT'S BLOCKING
       callFrame.on("participant-joined", (event) => {
-        console.log("👤 PARTICIPANT-JOINED event:", event);
+        addDebugLog("👤 PARTICIPANT-JOINED event:", event);
       });
 
       callFrame.on("participant-updated", (event) => {
-        console.log("👤 PARTICIPANT-UPDATED event:", event);
-        console.log(
+        addDebugLog("👤 PARTICIPANT-UPDATED event:", event);
+        addDebugLog(
           "👤 PARTICIPANT DATA:",
           JSON.stringify(event.participant, null, 2),
         );
@@ -347,47 +373,56 @@ export function DailyVideoChat({
       });
 
       callFrame.on("access-state-updated", (event) => {
-        console.log("🔐 ACCESS-STATE-UPDATED event:", event);
-        console.log("🔐 ACCESS STATE:", JSON.stringify(event.access, null, 2));
+        addDebugLog("🔐 ACCESS-STATE-UPDATED event:", event);
+        addDebugLog("🔐 ACCESS STATE:", JSON.stringify(event.access, null, 2));
       });
 
       callFrame.on("meeting-session-state-updated", (event) => {
-        console.log("🏢 MEETING-SESSION-STATE-UPDATED event:", event);
+        addDebugLog("🏢 MEETING-SESSION-STATE-UPDATED event:", event);
       });
 
       callFrame.on("track-started", (event) => {
-        console.log("🎵 TRACK-STARTED event:", event);
+        addDebugLog("🎵 TRACK-STARTED event:", event);
         if (event.track.kind === "video") {
           hasSeenPlayableVideo = true;
         }
       });
 
       callFrame.on("track-stopped", (event) => {
-        console.log("🛑 TRACK-STOPPED event:", event);
+        addDebugLog("🛑 TRACK-STOPPED event:", event);
       });
 
-      console.log("✅ All Daily event listeners attached");
+      addDebugLog("✅ All Daily event listeners attached");
 
       try {
-        console.log("🚀 Joining Daily room...");
-        console.log("📹 Camera setting:", useCameraChoice);
-        console.log("🔗 Room URL:", roomUrl);
-        console.log("👤 User name:", userName);
+        addDebugLog("🚀 Joining Daily room...");
+        addDebugLog("📹 Camera setting:", useCameraChoice);
+        addDebugLog("🔗 Room URL:", roomUrl);
+        addDebugLog("👤 User name:", userName);
 
         // NEW APPROACH: Always join with video OFF first, then enable it after joined
+        // ALSO disable audio since these are DEAF EVENTS (no mic needed!)
         const joinConfig: DailyCallOptions = {
           url: roomUrl,
           userName: userName,
           startVideoOff: true, // ALWAYS start with video off
+          startAudioOff: true, // DISABLE AUDIO - these are deaf events!
         };
 
-        console.log("⚙️ Join config:", joinConfig);
-        console.log("📹 Will enable camera AFTER joining if user wants it");
+        addDebugLog("⚙️ Join config:", joinConfig);
+        addDebugLog("📹 Will enable camera AFTER joining if user wants it");
+        addDebugLog("🔇 Audio is DISABLED (deaf events don't need mic!)");
 
         // Call join - don't wait for the promise, rely on 'joined-meeting' event instead
         // This prevents hanging when there are camera permission issues
         callFrame.join(joinConfig).catch((error) => {
-          console.error("❌ Join promise rejected:", error);
+          addDebugLog("❌ Join promise rejected:", error);
+          addDebugLog("❌ Error type:", typeof error);
+          addDebugLog("❌ Error constructor:", error?.constructor?.name);
+          addDebugLog(
+            "❌ Error stack:",
+            error instanceof Error ? error.stack : "N/A",
+          );
 
           // For join errors, just show an alert
           const errorMessage =
@@ -399,9 +434,9 @@ export function DailyVideoChat({
           }
         });
 
-        console.log("📡 Join called, waiting for 'joined-meeting' event...");
+        addDebugLog("📡 Join called, waiting for 'joined-meeting' event...");
       } catch (error) {
-        console.error("❌ Exception calling join():", error);
+        addDebugLog("❌ Exception calling join():", error);
         if (isMounted) {
           setIsJoining(false);
           alert(
@@ -415,14 +450,14 @@ export function DailyVideoChat({
 
     // Cleanup - only run on unmount
     return () => {
-      console.log("🧹 useEffect cleanup triggered");
+      addDebugLog("🧹 useEffect cleanup triggered");
       isMounted = false;
       shouldIgnoreLeaveRef.current = true;
       hasJoinedRef.current = false;
       isInitializingRef.current = false; // Reset for next time
 
       if (callFrameRef.current) {
-        console.log("🧹 Cleaning up Daily instance");
+        addDebugLog("🧹 Cleaning up Daily instance");
         callFrameRef.current.destroy();
         callFrameRef.current = null;
       }
@@ -439,6 +474,31 @@ export function DailyVideoChat({
           ref={containerRef}
           className="absolute inset-0 bg-gray-900 rounded-lg"
         />
+
+        {/* VISIBLE DEBUG LOGS FOR MOBILE - SHOWS ON SCREEN! */}
+        {debugLogs.length > 0 && (
+          <div className="absolute bottom-0 left-0 right-0 max-h-[40vh] overflow-y-auto bg-black/90 text-white text-xs font-mono p-3 z-50 border-t-2 border-cyan-500">
+            <div className="flex justify-between items-center mb-2 sticky top-0 bg-black/90 pb-2">
+              <strong className="text-cyan-400">
+                DEBUG LOGS (Mobile Visible)
+              </strong>
+              <button
+                onClick={() => setDebugLogs([])}
+                className="text-red-400 hover:text-red-300 text-xs"
+              >
+                Clear
+              </button>
+            </div>
+            {debugLogs.map((log, i) => (
+              <div
+                key={i}
+                className="py-1 border-b border-gray-800 break-words"
+              >
+                {log}
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Show loading overlay while joining */}
         {isJoining && (
