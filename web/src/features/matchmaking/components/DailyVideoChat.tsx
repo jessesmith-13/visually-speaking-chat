@@ -41,6 +41,7 @@ export function DailyVideoChat({
   const [showCameraError, setShowCameraError] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
   const [useCameraChoice, setUseCameraChoice] = useState<boolean | null>(null);
+  const [debugError, setDebugError] = useState<string>(""); // VISIBLE ERROR FOR DEBUGGING
 
   // Handle user choosing to join with camera
   const handleJoinWithCamera = async () => {
@@ -49,11 +50,13 @@ export function DailyVideoChat({
     // First, try to request camera permission using browser API
     try {
       console.log("📹 Requesting camera permission...");
+      setDebugError("Step 1: Requesting camera..."); // VISIBLE DEBUG
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
 
       // Permission granted! Clean up the test stream
       stream.getTracks().forEach((track) => track.stop());
       console.log("✅ Camera permission granted!");
+      setDebugError("Step 2: Camera permission granted!"); // VISIBLE DEBUG
 
       // Now join with camera
       setUseCameraChoice(true);
@@ -66,6 +69,11 @@ export function DailyVideoChat({
       const err = error as { name?: string; message?: string };
       console.log("❌ Error name:", err.name);
       console.log("❌ Error message:", err.message);
+
+      // SET VISIBLE ERROR MESSAGE
+      setDebugError(
+        `ERROR: ${err.name || "Unknown"} - ${err.message || "No message"}`,
+      );
 
       // Only show the "blocked" dialog for actual permission denials
       if (
@@ -99,10 +107,29 @@ export function DailyVideoChat({
       stream.getTracks().forEach((track) => track.stop());
       console.log("✅ Camera permission granted on retry!");
 
-      // Permission granted! Join with camera
+      // Permission granted! FORCE re-initialization by resetting the ref
+      console.log("🔄 Resetting initialization ref to allow retry...");
+      isInitializingRef.current = false;
+
+      // Destroy existing instance first
+      if (callFrameRef.current) {
+        console.log("🧹 Destroying existing Daily instance before retry...");
+        await callFrameRef.current.destroy();
+        callFrameRef.current = null;
+        await new Promise((resolve) => setTimeout(resolve, 300));
+      }
+
+      // Close error dialog and trigger re-initialization
       setShowCameraError(false);
       setUseCameraChoice(true);
       setIsJoining(true);
+
+      // Force a state change to trigger useEffect re-run
+      // We'll toggle useCameraChoice to null and back to true
+      setUseCameraChoice(null);
+      setTimeout(() => {
+        setUseCameraChoice(true);
+      }, 100);
     } catch (error) {
       console.error("❌ Camera still blocked:", error);
       // Keep the error dialog open - user needs to manually unblock
@@ -507,6 +534,13 @@ export function DailyVideoChat({
               <p className="text-xs text-gray-400 mt-3">
                 On iPhone Safari: Settings → Safari → Camera → Allow
               </p>
+
+              {/* VISIBLE DEBUG ERROR */}
+              {debugError && (
+                <div className="mt-4 p-2 bg-red-900/30 border border-red-700 rounded text-xs text-red-300 break-words">
+                  <strong>Debug:</strong> {debugError}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-3">
