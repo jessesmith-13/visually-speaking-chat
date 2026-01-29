@@ -283,6 +283,9 @@ export function DailyVideoChat({
         // Only show error if user actually wanted to use camera
         if (useCameraChoice) {
           console.error("❌ Camera error for user who wanted camera");
+          setDebugError(
+            `Daily camera-error event: ${JSON.stringify(event.errorMsg)}`,
+          ); // ADD DEBUG
           setIsJoining(false);
           setShowCameraError(true);
         } else {
@@ -382,6 +385,7 @@ export function DailyVideoChat({
               errorMessage.toLowerCase().includes("notfound"))
           ) {
             if (isMounted) {
+              setDebugError(`Join error: ${errorMessage}`); // ADD DEBUG
               setIsJoining(false);
               setShowCameraError(true);
             }
