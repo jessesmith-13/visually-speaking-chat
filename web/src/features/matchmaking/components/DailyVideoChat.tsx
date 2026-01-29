@@ -62,40 +62,35 @@ export function DailyVideoChat({
   const handleRetryCamera = async () => {
     console.log("🔄 Retrying camera permission...");
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach((track) => track.stop());
-      console.log("✅ Camera permission granted on retry!");
+    // Close error dialog immediately
+    setShowCameraError(false);
+    setIsJoining(true);
 
-      // Permission granted! FORCE re-initialization by resetting the ref
-      console.log("🔄 Resetting initialization ref to allow retry...");
-      isInitializingRef.current = false;
-
-      // Destroy existing instance first
-      if (callFrameRef.current) {
-        console.log("🧹 Destroying existing Daily instance before retry...");
-        await callFrameRef.current.destroy();
-        callFrameRef.current = null;
-        await new Promise((resolve) => setTimeout(resolve, 300));
+    // Try to enable camera on existing call frame
+    if (callFrameRef.current) {
+      console.log("📹 Attempting to enable camera on existing call...");
+      try {
+        await callFrameRef.current.setLocalVideo(true);
+        console.log("✅ Camera enabled successfully!");
+        setIsJoining(false);
+      } catch (err) {
+        console.error("❌ Failed to enable camera:", err);
+        setDebugError(`Failed to enable camera: ${err}`);
+        setIsJoining(false);
+        setShowCameraError(true);
       }
+    } else {
+      console.log("⚠️ No call frame exists, re-initializing...");
+      // Reset and re-initialize
+      isInitializingRef.current = false;
+      hasJoinedRef.current = false;
 
-      // Close error dialog and trigger re-initialization
-      setShowCameraError(false);
-      setUseCameraChoice(true);
-      setIsJoining(true);
-
-      // Force a state change to trigger useEffect re-run
-      // We'll toggle useCameraChoice to null and back to true
+      // Toggle state to trigger re-init
       setUseCameraChoice(null);
       setTimeout(() => {
         setUseCameraChoice(true);
+        setIsJoining(true);
       }, 100);
-    } catch (error) {
-      console.error("❌ Camera still blocked:", error);
-      // Keep the error dialog open - user needs to manually unblock
-      alert(
-        "Camera is still blocked. Please go to your browser settings and allow camera access for this site, then tap 'Try Again'.",
-      );
     }
   };
 
@@ -170,6 +165,10 @@ export function DailyVideoChat({
       let hasSeenStartedCamera = false;
       let hasSeenPlayableVideo = false;
       let hasSeenLocalParticipant = false; // NEW: Track if we've seen our own participant
+
+      // IGNORE camera errors for the first 5 seconds (user needs time to respond to prompt!)
+      const joinStartTime = Date.now();
+      const CAMERA_ERROR_GRACE_PERIOD = 5000; // 5 seconds
 
       // Fallback timeout to force join if Daily hangs
       const fallbackTimeout = setTimeout(() => {
@@ -291,6 +290,18 @@ export function DailyVideoChat({
 
       callFrame.on("camera-error", (event: DailyEventObjectCameraError) => {
         console.log("📷 CAMERA-ERROR event:", event);
+
+        const timeSinceJoin = Date.now() - joinStartTime;
+        console.log(`⏱️ Time since join started: ${timeSinceJoin}ms`);
+
+        // IGNORE camera errors during the grace period (user needs time to respond!)
+        if (timeSinceJoin < CAMERA_ERROR_GRACE_PERIOD) {
+          console.log(
+            `⏱️ IGNORING camera error (still in ${CAMERA_ERROR_GRACE_PERIOD}ms grace period)`,
+          );
+          return;
+        }
+
         // Only show error if user actually wanted to use camera
         if (useCameraChoice) {
           console.error("❌ Camera error for user who wanted camera");
