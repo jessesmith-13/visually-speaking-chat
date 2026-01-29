@@ -47,55 +47,15 @@ export function DailyVideoChat({
   const handleJoinWithCamera = async () => {
     console.log("✅ User chose: Join WITH Camera");
 
-    // First, try to request camera permission using browser API
-    try {
-      console.log("📹 Requesting camera permission...");
-      setDebugError("Step 1: Requesting camera..."); // VISIBLE DEBUG
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+    // DON'T pre-check camera - just let Daily handle it!
+    // The pre-check was causing a race condition where the browser
+    // wouldn't update permission state in time for Daily
+    console.log("📹 Skipping pre-check, letting Daily handle camera directly");
+    setDebugError("Step 1: Starting Daily with camera enabled..."); // VISIBLE DEBUG
 
-      // Permission granted! Clean up the test stream
-      stream.getTracks().forEach((track) => track.stop());
-      console.log("✅ Camera permission granted!");
-      setDebugError("Step 2: Camera permission granted!"); // VISIBLE DEBUG
-
-      // Now join with camera
-      setUseCameraChoice(true);
-      setShowPermissionDialog(false);
-      setIsJoining(true);
-    } catch (error) {
-      console.error("❌ Camera error:", error);
-
-      // Check the specific error type
-      const err = error as { name?: string; message?: string };
-      console.log("❌ Error name:", err.name);
-      console.log("❌ Error message:", err.message);
-
-      // SET VISIBLE ERROR MESSAGE
-      setDebugError(
-        `ERROR: ${err.name || "Unknown"} - ${err.message || "No message"}`,
-      );
-
-      // Only show the "blocked" dialog for actual permission denials
-      if (
-        err.name === "NotAllowedError" ||
-        err.name === "PermissionDeniedError"
-      ) {
-        console.log("🚫 Permission specifically denied");
-        setShowPermissionDialog(false);
-        setShowCameraError(true);
-      } else {
-        // For other errors (camera in use, hardware issues, etc), just join without camera
-        console.log(
-          "⚠️ Camera error but not permission issue - joining without camera",
-        );
-        console.log(
-          "ℹ️ User can still enable camera in Daily controls if they want",
-        );
-        setUseCameraChoice(true); // Still try to join with camera enabled - Daily will handle it
-        setShowPermissionDialog(false);
-        setIsJoining(true);
-      }
-    }
+    setUseCameraChoice(true);
+    setShowPermissionDialog(false);
+    setIsJoining(true);
   };
 
   // Handle retry after camera error
