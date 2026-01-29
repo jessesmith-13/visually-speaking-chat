@@ -412,18 +412,20 @@ export function VideoRoomRoute() {
                   className={`relative aspect-video bg-gray-900 rounded-lg overflow-hidden`}
                 >
                   {matchStatus === "not_started" ? (
-                    <div className="absolute inset-0 flex items-center justify-center p-4">
-                      <div className="text-center max-w-md w-full">
-                        <Users className="size-12 sm:size-16 text-gray-600 mx-auto mb-3 sm:mb-4" />
-                        <h3 className="text-lg sm:text-xl font-semibold mb-2">
-                          Ready to Connect?
-                        </h3>
-                        <p className="text-sm sm:text-base text-gray-400 mb-4 sm:mb-6">
-                          Click the button below to start meeting other
-                          attendees through random video chat pairings.
-                        </p>
+                    <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6">
+                      <div className="text-center max-w-md w-full space-y-4 sm:space-y-6">
+                        <Users className="size-16 sm:size-20 text-gray-600 mx-auto" />
+                        <div className="space-y-2 sm:space-y-3">
+                          <h3 className="text-xl sm:text-2xl font-semibold">
+                            Ready to Connect?
+                          </h3>
+                          <p className="text-sm sm:text-base text-gray-400 px-2">
+                            Click the button below to start meeting other
+                            attendees through random video chat pairings.
+                          </p>
+                        </div>
                         {permissionError && (
-                          <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-red-900/50 border border-red-700 rounded-lg text-xs sm:text-sm text-red-200">
+                          <div className="p-3 sm:p-4 bg-red-900/50 border border-red-700 rounded-lg text-sm text-red-200">
                             {permissionError}
                           </div>
                         )}
@@ -431,11 +433,11 @@ export function VideoRoomRoute() {
                           size="lg"
                           onClick={handleStartMatching}
                           disabled={isJoining}
-                          className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto"
+                          className="bg-blue-600 hover:bg-blue-700 w-full sm:w-auto h-12 sm:h-14 text-base sm:text-lg px-8"
                         >
                           {isJoining ? (
                             <>
-                              <Loader2 className="size-5 mr-2 animate-spin" />
+                              <Loader2 className="size-5 sm:size-6 mr-2 animate-spin" />
                               Joining Queue...
                             </>
                           ) : (
