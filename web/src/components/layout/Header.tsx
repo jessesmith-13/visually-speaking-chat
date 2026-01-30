@@ -1,12 +1,22 @@
-import { useNavigate, useLocation } from 'react-router-dom';
-import { Button } from '@/ui/button';
-import { useApp } from '@/app/hooks';
-import { signOut } from '@/features/auth/api';
-import { LogoWithText } from '@/components/common/Logo';
-import { ThemeToggle } from '@/components/common/ThemeToggle';
-import { toast } from 'sonner';
-import { useState } from 'react';
-import { Calendar, Plus, Users, Mail, User, LogOut, X, Menu } from 'lucide-react';
+import { useNavigate, useLocation } from "react-router-dom";
+import { Button } from "@/ui/button";
+import { useApp } from "@/app/hooks";
+import { signOut } from "@/features/auth/api";
+import { LogoWithText } from "@/components/common/Logo";
+import { ThemeToggle } from "@/components/common/ThemeToggle";
+import { toast } from "sonner";
+import { useState } from "react";
+import {
+  Calendar,
+  Plus,
+  Users,
+  Mail,
+  User,
+  LogOut,
+  X,
+  Menu,
+  Tag,
+} from "lucide-react";
 
 export function Header() {
   const navigate = useNavigate();
@@ -15,16 +25,15 @@ export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const handleLogout = async () => {
-    console.log(`🔒 Logging out user: ${user?.email}`);
     try {
       await signOut();
       setUser(null);
-      navigate('/');
-      toast.success('Logged out successfully');
+      navigate("/");
+      toast.success("Logged out successfully");
       setMobileMenuOpen(false);
     } catch (error) {
-      console.error('Logout error:', error);
-      toast.error('Failed to logout');
+      console.error("Logout error:", error);
+      toast.error("Failed to logout");
     }
   };
 
@@ -37,10 +46,7 @@ export function Header() {
     <header className="border-b bg-white dark:bg-gray-900 dark:border-gray-800">
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          <div 
-            className="cursor-pointer"
-            onClick={() => navigate('/')}
-          >
+          <div className="cursor-pointer" onClick={() => navigate("/")}>
             <LogoWithText size="md" />
           </div>
 
@@ -49,8 +55,10 @@ export function Header() {
             {user && (
               <>
                 <Button
-                  variant={location.pathname === '/events' ? 'default' : 'ghost'}
-                  onClick={() => handleNavigate('/events')}
+                  variant={
+                    location.pathname === "/events" ? "default" : "ghost"
+                  }
+                  onClick={() => handleNavigate("/events")}
                 >
                   <Calendar className="size-4 mr-2" />
                   Events
@@ -58,25 +66,48 @@ export function Header() {
                 {user.isAdmin && (
                   <>
                     <Button
-                      variant={location.pathname === '/create-event' ? 'default' : 'ghost'}
-                      onClick={() => handleNavigate('/create-event')}
+                      variant={
+                        location.pathname === "/create-event"
+                          ? "default"
+                          : "ghost"
+                      }
+                      onClick={() => handleNavigate("/create-event")}
                     >
                       <Plus className="size-4 mr-2" />
                       Create Event
                     </Button>
                     <Button
-                      variant={location.pathname === '/admin/users' ? 'default' : 'ghost'}
-                      onClick={() => handleNavigate('/admin/users')}
+                      variant={
+                        location.pathname === "/admin/users"
+                          ? "default"
+                          : "ghost"
+                      }
+                      onClick={() => handleNavigate("/admin/users")}
                     >
                       <Users className="size-4 mr-2" />
                       Users
                     </Button>
                     <Button
-                      variant={location.pathname === '/admin/email' ? 'default' : 'ghost'}
-                      onClick={() => handleNavigate('/admin/email')}
+                      variant={
+                        location.pathname === "/admin/email"
+                          ? "default"
+                          : "ghost"
+                      }
+                      onClick={() => handleNavigate("/admin/email")}
                     >
                       <Mail className="size-4 mr-2" />
                       Email
+                    </Button>
+                    <Button
+                      variant={
+                        location.pathname === "/admin/promo-codes"
+                          ? "default"
+                          : "ghost"
+                      }
+                      onClick={() => handleNavigate("/admin/promo-codes")}
+                    >
+                      <Tag className="size-4 mr-2" />
+                      Promo Codes
                     </Button>
                   </>
                 )}
@@ -98,9 +129,7 @@ export function Header() {
             {!user && (
               <>
                 <ThemeToggle />
-                <Button onClick={() => navigate('/auth')}>
-                  Sign In
-                </Button>
+                <Button onClick={() => navigate("/auth")}>Sign In</Button>
               </>
             )}
           </nav>
@@ -114,11 +143,15 @@ export function Header() {
                 size="sm"
                 onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               >
-                {mobileMenuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+                {mobileMenuOpen ? (
+                  <X className="size-5" />
+                ) : (
+                  <Menu className="size-5" />
+                )}
               </Button>
             )}
             {!user && (
-              <Button onClick={() => navigate('/auth')} size="sm">
+              <Button onClick={() => navigate("/auth")} size="sm">
                 Sign In
               </Button>
             )}
@@ -138,47 +171,67 @@ export function Header() {
                   </span>
                 )}
               </div>
-              
+
               <Button
-                variant={location.pathname === '/events' ? 'default' : 'ghost'}
-                onClick={() => handleNavigate('/events')}
+                variant={location.pathname === "/events" ? "default" : "ghost"}
+                onClick={() => handleNavigate("/events")}
                 className="justify-start"
               >
                 <Calendar className="size-4 mr-2" />
                 Events
               </Button>
-              
+
               {user.isAdmin && (
                 <>
                   <Button
-                    variant={location.pathname === '/create-event' ? 'default' : 'ghost'}
-                    onClick={() => handleNavigate('/create-event')}
+                    variant={
+                      location.pathname === "/create-event"
+                        ? "default"
+                        : "ghost"
+                    }
+                    onClick={() => handleNavigate("/create-event")}
                     className="justify-start"
                   >
                     <Plus className="size-4 mr-2" />
                     Create Event
                   </Button>
                   <Button
-                    variant={location.pathname === '/admin/users' ? 'default' : 'ghost'}
-                    onClick={() => handleNavigate('/admin/users')}
+                    variant={
+                      location.pathname === "/admin/users" ? "default" : "ghost"
+                    }
+                    onClick={() => handleNavigate("/admin/users")}
                     className="justify-start"
                   >
                     <Users className="size-4 mr-2" />
                     Users
                   </Button>
                   <Button
-                    variant={location.pathname === '/admin/email' ? 'default' : 'ghost'}
-                    onClick={() => handleNavigate('/admin/email')}
+                    variant={
+                      location.pathname === "/admin/email" ? "default" : "ghost"
+                    }
+                    onClick={() => handleNavigate("/admin/email")}
                     className="justify-start"
                   >
                     <Mail className="size-4 mr-2" />
                     Email
                   </Button>
+                  <Button
+                    variant={
+                      location.pathname === "/admin/promo-codes"
+                        ? "default"
+                        : "ghost"
+                    }
+                    onClick={() => handleNavigate("/admin/promo-codes")}
+                    className="justify-start"
+                  >
+                    <Tag className="size-4 mr-2" />
+                    Promo Codes
+                  </Button>
                 </>
               )}
-              
-              <Button 
-                variant="ghost" 
+
+              <Button
+                variant="ghost"
                 onClick={handleLogout}
                 className="justify-start text-red-600 dark:text-red-400"
               >

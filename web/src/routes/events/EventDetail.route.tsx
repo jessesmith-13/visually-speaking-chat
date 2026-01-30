@@ -10,6 +10,8 @@ import {
   useStripeReturn,
   EventUpdate,
 } from "@/features/events/hooks";
+import { redeemPromoCode } from "@/features/promo-codes/api";
+import type { RedeemPromoResponse } from "@/features/promo-codes/types";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
 import { ArrowLeft } from "lucide-react";
@@ -76,6 +78,11 @@ export function EventDetailRoute() {
   // Edit event state
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
+  // Promo code state
+  const [promoCodeData, setPromoCodeData] =
+    useState<RedeemPromoResponse | null>(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
+
   // Early return AFTER all hooks
   if (!currentEvent) {
     return (
@@ -110,9 +117,17 @@ export function EventDetailRoute() {
 
       const { createCheckoutSession } = await import("@/lib/stripe/client");
 
+      // Calculate final amount (use discounted amount if promo code applied)
+      const finalAmount =
+        promoCodeData?.discountedAmount ?? Math.round(currentEvent.price * 100);
+
+      console.log(
+        `💰 Amount: $${finalAmount / 100} (original: $${currentEvent.price}, discount: $${discountAmount / 100})`,
+      );
+
       const { checkoutUrl } = await createCheckoutSession({
         eventId: currentEvent.id,
-        amount: Math.round(currentEvent.price * 100),
+        amount: finalAmount,
       });
 
       console.log("✅ Redirecting to Stripe Checkout...");
@@ -275,6 +290,69 @@ export function EventDetailRoute() {
     }
   };
 
+  const handleApplyPromoCode = async (
+    code: string,
+  ): Promise<{ success: boolean; discount?: number; message?: string }> => {
+    if (!currentEvent) {
+      return { success: false, message: "Event not found" };
+    }
+
+    try {
+      console.log("🎟️ Applying promo code:", code);
+
+      const result = await redeemPromoCode(currentEvent.id, code);
+
+      console.log("✅ Promo code response:", result);
+
+      // If it's a free ticket, auto-claim it
+      if (result.free && result.ticket) {
+        toast.success("🎉 Free ticket claimed successfully!");
+
+        // Update local state
+        setHasTicket(true);
+
+        // Refresh data
+        await Promise.all([refreshUserTickets(), refreshEvents()]);
+
+        return {
+          success: true,
+          message: "Free ticket claimed!",
+        };
+      }
+
+      // Otherwise, apply the discount for checkout
+      if (
+        result.discountedAmount !== undefined &&
+        result.originalAmount !== undefined
+      ) {
+        const discountInCents = result.originalAmount - result.discountedAmount;
+        setDiscountAmount(discountInCents);
+        setPromoCodeData(result);
+
+        const discountPercent = Math.round(
+          (discountInCents / result.originalAmount) * 100,
+        );
+
+        return {
+          success: true,
+          discount: discountInCents,
+          message: `${discountPercent}% discount applied!`,
+        };
+      }
+
+      return { success: false, message: "Invalid promo code response" };
+    } catch (error: unknown) {
+      console.error("❌ Promo code error:", error);
+
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Invalid or expired promo code";
+
+      return { success: false, message: errorMessage };
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       <div className="container mx-auto px-4 py-8">
@@ -321,6 +399,8 @@ export function EventDetailRoute() {
               onCancelTicket={() => setShowCancelDialog(true)}
               onCancelEvent={() => setShowCancelEventDialog(true)}
               onEditEvent={() => setIsEditDialogOpen(true)}
+              onApplyPromoCode={handleApplyPromoCode}
+              discountAmount={discountAmount}
             />
 
             <EventUpdatesCard updates={eventUpdates} />

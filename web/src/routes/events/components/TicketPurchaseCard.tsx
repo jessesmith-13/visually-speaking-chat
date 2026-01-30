@@ -1,6 +1,7 @@
 import { format } from "date-fns";
-import { DollarSign, CreditCard, Trash2, Edit } from "lucide-react";
+import { DollarSign, CreditCard, Trash2, Edit, Tag } from "lucide-react";
 import { Button } from "@/ui/button";
+import { Input } from "@/ui/input";
 import {
   Card,
   CardContent,
@@ -10,6 +11,7 @@ import {
 } from "@/ui/card";
 import { Event } from "@/features/events/types";
 import { User } from "@/features/profile/types";
+import { useState } from "react";
 
 interface TicketPurchaseCardProps {
   event: Event;
@@ -29,6 +31,10 @@ interface TicketPurchaseCardProps {
   onCancelTicket: () => void;
   onCancelEvent: () => void;
   onEditEvent: () => void;
+  onApplyPromoCode?: (
+    code: string,
+  ) => Promise<{ success: boolean; discount?: number; message?: string }>;
+  discountAmount?: number;
 }
 
 export function TicketPurchaseCard({
@@ -49,9 +55,36 @@ export function TicketPurchaseCard({
   onCancelTicket,
   onCancelEvent,
   onEditEvent,
+  onApplyPromoCode,
+  discountAmount = 0,
 }: TicketPurchaseCardProps) {
   const isAdmin = user?.isAdmin || false;
   const canJoinEvent = hasTicket || isAdmin;
+  const [promoCode, setPromoCode] = useState("");
+  const [applyingPromo, setApplyingPromo] = useState(false);
+  const [promoMessage, setPromoMessage] = useState("");
+
+  const finalPrice = Math.max(0, event.price - discountAmount / 100);
+
+  const handleApplyPromo = async () => {
+    if (!onApplyPromoCode || !promoCode.trim()) return;
+
+    setApplyingPromo(true);
+    setPromoMessage("");
+
+    try {
+      const result = await onApplyPromoCode(promoCode.trim());
+      if (result.success) {
+        setPromoMessage(`✓ Promo code applied! ${result.message || ""}`);
+      } else {
+        setPromoMessage(`✗ ${result.message || "Invalid promo code"}`);
+      }
+    } catch {
+      setPromoMessage(`✗ Failed to apply promo code`);
+    } finally {
+      setApplyingPromo(false);
+    }
+  };
 
   return (
     <Card className="sticky top-4">
@@ -187,14 +220,50 @@ export function TicketPurchaseCard({
                     <span>Ticket Price</span>
                     <span className="font-semibold">${event.price}</span>
                   </div>
+                  {discountAmount > 0 && (
+                    <div className="flex justify-between text-sm text-green-600">
+                      <span>Discount</span>
+                      <span className="font-semibold">
+                        -${(discountAmount / 100).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm">
                     <span>Service Fee</span>
                     <span className="font-semibold">$0</span>
                   </div>
                   <div className="border-t pt-2 flex justify-between font-semibold">
                     <span>Total</span>
-                    <span>${event.price}</span>
+                    <span>${finalPrice.toFixed(2)}</span>
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Input
+                    type="text"
+                    placeholder="Enter promo code"
+                    value={promoCode}
+                    onChange={(e) => setPromoCode(e.target.value)}
+                    className="w-full"
+                  />
+                  <Button
+                    className="w-full"
+                    onClick={handleApplyPromo}
+                    disabled={applyingPromo}
+                  >
+                    <Tag className="size-4 mr-2" />
+                    {applyingPromo ? "Applying..." : "Apply Promo Code"}
+                  </Button>
+                  {promoMessage && (
+                    <p
+                      className={`text-xs ${
+                        promoMessage.startsWith("✓")
+                          ? "text-green-600"
+                          : "text-red-600"
+                      } text-center`}
+                    >
+                      {promoMessage}
+                    </p>
+                  )}
                 </div>
                 <Button
                   className="w-full"
