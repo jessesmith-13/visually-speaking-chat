@@ -174,13 +174,13 @@ export function EventsRoute() {
           </div>
 
           {!user && (
-            <Card className="mb-8 bg-blue-50 border-blue-200">
+            <Card className="mb-8 bg-blue-50 border-blue-200 dark:bg-gray-800 dark:border-gray-700">
               <CardContent className="pt-6">
-                <p className="text-center">
+                <p className="text-center dark:text-gray-300">
                   Please{" "}
                   <button
                     onClick={() => navigate("/auth")}
-                    className="text-blue-600 underline font-semibold"
+                    className="text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 underline font-semibold transition-colors"
                   >
                     sign in
                   </button>{" "}
@@ -204,7 +204,7 @@ export function EventsRoute() {
                       | "cancelled",
                   )
                 }
-                className="border-gray-300 dark:border-gray-700 rounded-md px-3 py-2"
+                className="border-gray-300 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 rounded-md px-3 py-2"
               >
                 <option value="upcoming">Upcoming Events</option>
                 <option value="live">Live Events</option>
