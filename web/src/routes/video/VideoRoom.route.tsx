@@ -26,12 +26,14 @@ export function VideoRoomRoute() {
   >("not_started");
   const [roomName, setRoomName] = useState<string>("");
   const [dailyUrl, setDailyUrl] = useState<string>("");
-  const [connectionTime, setConnectionTime] = useState(0);
+  const [connectionTime, setConnectionTime] = useState(300); // Start at 300 seconds (5 minutes)
   const [onlineUsers, setOnlineUsers] = useState(0);
   const [isJoining, setIsJoining] = useState(false);
   const [permissionError, setPermissionError] = useState<string>("");
+  const [showTimeWarning, setShowTimeWarning] = useState(false); // For 30-second flash
   const timerRef = useRef<number | null>(null);
   const pollingRef = useRef<number | null>(null);
+  const handleNextRef = useRef<(() => Promise<void>) | null>(null); // Store handleNext reference
 
   const hasTicket =
     user?.purchasedTickets.includes(currentEvent?.id || "") || false;
@@ -76,17 +78,14 @@ export function VideoRoomRoute() {
             setMatchStatus("matched");
             setRoomName(data.current_room_id);
           } else if (!data.is_matched) {
-            // ONLY set to searching if we're not already matched
-            // This prevents unmounting DailyVideoChat when joinQueue resets our status
-            setMatchStatus((prev) => {
-              if (prev === "matched") {
-                console.log(
-                  "⏭️ Ignoring is_matched=false while in matched state",
-                );
-                return prev; // Stay matched
-              }
-              return "searching";
-            });
+            // Partner left or match was broken - go back to searching
+            console.log(
+              "🔄 Partner left or match ended, returning to queue...",
+            );
+            setMatchStatus("searching");
+            setRoomName("");
+            setDailyUrl("");
+            setConnectionTime(300); // Reset timer
           }
         },
       );
@@ -181,14 +180,36 @@ export function VideoRoomRoute() {
   useEffect(() => {
     if (matchStatus === "matched") {
       timerRef.current = window.setInterval(() => {
-        setConnectionTime((prev) => prev + 1);
+        setConnectionTime((prev) => {
+          const newTime = prev - 1; // Count DOWN
+
+          // Trigger 30-second warning flash
+          if (newTime === 30) {
+            setShowTimeWarning(true);
+            // Flash for 3 seconds then hide
+            setTimeout(() => setShowTimeWarning(false), 3000);
+          }
+
+          // Auto-next when timer hits 0
+          if (newTime === 0) {
+            console.log(
+              "⏰ Timer reached 0:00 - automatically finding next partner...",
+            );
+            // Use ref to avoid closure issues
+            handleNextRef.current?.();
+          }
+
+          // Stop at 0
+          return Math.max(0, newTime);
+        });
       }, 1000);
     } else {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-      setConnectionTime(0);
+      setConnectionTime(300); // Reset to 5 minutes (300 seconds)
+      setShowTimeWarning(false);
     }
 
     return () => {
@@ -197,6 +218,28 @@ export function VideoRoomRoute() {
       }
     };
   }, [matchStatus]);
+
+  // Memoize handler functions to prevent DailyVideoChat re-renders
+  const handleNext = useCallback(async () => {
+    if (!currentEvent) return;
+
+    setMatchStatus("searching");
+    setConnectionTime(300); // Reset to 5 minutes
+    setDailyUrl("");
+
+    // Leave current match and rejoin queue
+    try {
+      await matchmaking.leaveQueue(currentEvent.id);
+      await matchmaking.joinQueue(currentEvent.id);
+    } catch (error) {
+      console.error("Error finding next partner:", error);
+    }
+  }, [currentEvent]);
+
+  // Store handleNext in ref so timer can call it
+  useEffect(() => {
+    handleNextRef.current = handleNext;
+  }, [handleNext]);
 
   // Track actual online users in the matchmaking queue
   useEffect(() => {
@@ -270,22 +313,33 @@ export function VideoRoomRoute() {
     navigate("/events");
   }, [currentEvent, navigate]);
 
-  const handleNext = useCallback(async () => {
+  const handleStartMatching = async () => {
     if (!currentEvent) return;
 
-    setMatchStatus("searching");
-    setConnectionTime(0);
-    setDailyUrl("");
+    setIsJoining(true);
+    setPermissionError("");
 
-    // Leave current match and rejoin queue
     try {
-      await matchmaking.leaveQueue(currentEvent.id);
+      console.log("📋 Joining matchmaking queue...");
       await matchmaking.joinQueue(currentEvent.id);
-    } catch (error) {
-      console.error("Error finding next partner:", error);
+      setMatchStatus("searching");
+    } catch (error: unknown) {
+      console.error("❌ Error joining queue:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      setPermissionError(`Failed to join queue: ${errorMessage}`);
+    } finally {
+      setIsJoining(false);
     }
-  }, [currentEvent]);
+  };
 
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  // Handle cases where user is not logged in or does not have a ticket
   if (!currentEvent || !user) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
@@ -313,32 +367,6 @@ export function VideoRoomRoute() {
       </div>
     );
   }
-
-  const handleStartMatching = async () => {
-    if (!currentEvent) return;
-
-    setIsJoining(true);
-    setPermissionError("");
-
-    try {
-      console.log("📋 Joining matchmaking queue...");
-      await matchmaking.joinQueue(currentEvent.id);
-      setMatchStatus("searching");
-    } catch (error: unknown) {
-      console.error("❌ Error joining queue:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      setPermissionError(`Failed to join queue: ${errorMessage}`);
-    } finally {
-      setIsJoining(false);
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
 
   return (
     <div className="min-h-screen bg-gray-900 text-white flex flex-col">
@@ -409,8 +437,26 @@ export function VideoRoomRoute() {
             <Card className="bg-gray-800 border-gray-700">
               <CardContent className="p-0">
                 <div
-                  className={`relative aspect-video bg-gray-900 rounded-lg overflow-hidden`}
+                  className={`relative aspect-video bg-gray-900 rounded-lg overflow-hidden ${
+                    showTimeWarning
+                      ? "ring-8 ring-yellow-500 animate-pulse"
+                      : ""
+                  }`}
                 >
+                  {/* 30-Second Warning Overlay */}
+                  {showTimeWarning && (
+                    <div className="absolute inset-0 z-50 pointer-events-none">
+                      <div className="absolute inset-0 bg-yellow-500/20 animate-pulse" />
+                      <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                        <div className="bg-yellow-500 text-black px-8 py-4 rounded-lg shadow-2xl animate-bounce">
+                          <p className="text-2xl font-bold text-center">
+                            ⏰ 30 SECONDS LEFT!
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {matchStatus === "not_started" ? (
                     <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6">
                       <div className="text-center max-w-md w-full space-y-4 sm:space-y-6">
