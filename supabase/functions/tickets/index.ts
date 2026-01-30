@@ -9,6 +9,7 @@
  *   DELETE /:id/cancel - Cancel ticket with optional refund (uses atomic RPC)
  *   GET /my-tickets - Get user's tickets
  *   POST /verify - Verify ticket check-in
+ *   POST /redeem-promo - Redeem promo code for discount
  *
  * Security: Requires user authentication
  */
@@ -51,6 +52,11 @@ interface PurchaseTicketBody extends Record<string, unknown> {
 interface VerifyTicketBody extends Record<string, unknown> {
   ticketId: string;
   eventId?: string;
+}
+
+interface RedeemPromoBody extends Record<string, unknown> {
+  eventId: string;
+  code: string;
 }
 
 // Route handlers
@@ -896,6 +902,199 @@ Deno.serve(async (req) => {
           console.log(`✅ Fetched ${data.length} tickets`);
 
           return json({ tickets: data }, 200, corsHeaders);
+        },
+      },
+      {
+        pattern: /^\/redeem$/,
+        method: "POST",
+        handler: async (req, userId, _, corsHeaders) => {
+          const body: RedeemPromoBody = await req.json();
+          const requiredCheck = validateRequired(body, ["eventId", "code"]);
+          if (!requiredCheck.valid) {
+            return badRequest(requiredCheck.error!, corsHeaders);
+          }
+
+          const { eventId, code } = body;
+          const normalizedCode = code.toUpperCase();
+
+          console.log(
+            `🎁 Redeeming promo code: ${normalizedCode} for event: ${eventId}`,
+          );
+
+          // Validate event ID
+          const eventUuidCheck = validateUuid(eventId);
+          if (!eventUuidCheck.valid) {
+            return badRequest("Invalid event ID", corsHeaders);
+          }
+
+          // 1. Check if user already has a ticket
+          const { data: existingTicket } = await supabaseAdmin
+            .from("tickets")
+            .select("id")
+            .eq("user_id", userId)
+            .eq("event_id", eventId)
+            .eq("status", "active")
+            .maybeSingle();
+
+          if (existingTicket) {
+            return badRequest(
+              "You already have a ticket for this event",
+              corsHeaders,
+            );
+          }
+
+          // 2. Get and validate promo code
+          const { data: promo, error: promoError } = await supabaseAdmin
+            .from("promo_codes")
+            .select(
+              "id, type, amount, event_id, max_redemptions, redeemed_count, expires_at, active",
+            )
+            .eq("code", normalizedCode)
+            .single();
+
+          if (promoError || !promo) {
+            return badRequest("Invalid promo code", corsHeaders);
+          }
+
+          // Validate promo code
+          if (!promo.active) {
+            return badRequest("This promo code is inactive", corsHeaders);
+          }
+
+          if (promo.expires_at && new Date(promo.expires_at) < new Date()) {
+            return badRequest("This promo code has expired", corsHeaders);
+          }
+
+          if (promo.redeemed_count >= promo.max_redemptions) {
+            return badRequest(
+              "This promo code has been fully redeemed",
+              corsHeaders,
+            );
+          }
+
+          if (promo.event_id && promo.event_id !== eventId) {
+            return badRequest(
+              "This promo code is not valid for this event",
+              corsHeaders,
+            );
+          }
+
+          // Check if user already used this code for this event
+          const { data: existingRedemption } = await supabaseAdmin
+            .from("promo_redemptions")
+            .select("id")
+            .eq("promo_code_id", promo.id)
+            .eq("user_id", userId)
+            .eq("event_id", eventId)
+            .maybeSingle();
+
+          if (existingRedemption) {
+            return badRequest(
+              "You have already used this promo code for this event",
+              corsHeaders,
+            );
+          }
+
+          // 3. Get event details
+          const { data: event, error: eventError } = await supabaseAdmin
+            .from("events")
+            .select(
+              "capacity, attendees, name, price, date, event_type, venue_name, venue_address",
+            )
+            .eq("id", eventId)
+            .single();
+
+          if (eventError || !event) {
+            console.error("❌ Event not found:", eventError);
+            return notFound("Event not found", corsHeaders);
+          }
+
+          if (event.attendees >= event.capacity) {
+            return badRequest("Event is sold out", corsHeaders);
+          }
+
+          // 4. Calculate final price
+          let finalPrice = event.price;
+          const discountType = promo.type as string;
+          const discountAmount = promo.amount as number;
+
+          if (discountType === "free" || discountAmount >= 100) {
+            finalPrice = 0;
+          } else if (discountType === "percent") {
+            finalPrice = event.price * (1 - discountAmount / 100);
+          } else if (discountType === "fixed") {
+            finalPrice = Math.max(0, event.price - discountAmount);
+          }
+
+          console.log(
+            `💰 Original: $${event.price}, Discount: ${discountType} ${discountAmount}, Final: $${finalPrice}`,
+          );
+
+          // 5. If not free, return discounted amount for Stripe
+          if (finalPrice > 0) {
+            return json(
+              {
+                free: false,
+                discountedAmount: Math.round(finalPrice * 100),
+                originalAmount: Math.round(event.price * 100),
+                discount: Math.round((event.price - finalPrice) * 100),
+                promoCodeId: promo.id,
+              },
+              200,
+              corsHeaders,
+            );
+          }
+
+          // 6. Create free ticket
+          const { data: newTicket, error: ticketError } = await supabaseAdmin
+            .from("tickets")
+            .insert({
+              user_id: userId,
+              event_id: eventId,
+              payment_amount: 0,
+              stripe_payment_intent_id: `promo_free_${Date.now()}`,
+              status: "active",
+              source: "promo",
+              promo_code_id: promo.id,
+            })
+            .select()
+            .single();
+
+          if (ticketError || !newTicket) {
+            console.error("❌ Error creating ticket:", ticketError);
+            return serverError(
+              ticketError || new Error("Failed to create ticket"),
+              corsHeaders,
+            );
+          }
+
+          // 7. Update counters
+          await supabaseAdmin
+            .from("promo_codes")
+            .update({ redeemed_count: promo.redeemed_count + 1 })
+            .eq("id", promo.id);
+
+          await supabaseAdmin.from("promo_redemptions").insert({
+            promo_code_id: promo.id,
+            user_id: userId,
+            event_id: eventId,
+          });
+
+          await supabaseAdmin
+            .from("events")
+            .update({ attendees: event.attendees + 1 })
+            .eq("id", eventId);
+
+          console.log("✅ Free ticket created:", newTicket.id);
+
+          return json(
+            {
+              free: true,
+              ticket: newTicket,
+            },
+            201,
+            corsHeaders,
+          );
         },
       },
     ];

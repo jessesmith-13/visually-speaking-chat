@@ -12,6 +12,11 @@
  *   POST /events/:eventId/updates - Post event update
  *   GET /events/:eventId/updates - Get event updates (PUBLIC)
  *   GET /events/:eventId/participants - Get event participants
+ *   POST /promo-codes - Create promo code
+ *   GET /promo-codes - List all promo codes
+ *   PUT /promo-codes/:promoCodeId - Update promo code
+ *   DELETE /promo-codes/:promoCodeId - Delete promo code
+ *   POST /comp-ticket - Issue comp ticket
  *
  * Security: Requires admin authentication (except GET event updates)
  */
@@ -55,7 +60,7 @@ Deno.serve(async (req) => {
     const url = new URL(req.url);
     const customPath = req.headers.get("x-path");
     const path = customPath || url.pathname.replace(/^\/admin-operations/, "");
-    const method = req.method;
+    let method = req.method;
 
     // Create admin client (needed for all operations)
     const supabaseAdmin = createAdminClient();
@@ -474,6 +479,333 @@ Deno.serve(async (req) => {
 
           console.log(`✅ Fetched ${data.length} participants`);
           return json({ participants: data }, 200, corsHeaders);
+        },
+      },
+
+      // POST /promo-codes - Create promo code
+      {
+        pattern: /^\/promo-codes$/,
+        method: "POST",
+        handler: async (req, userId, _match, supabaseAdmin, corsHeaders) => {
+          const body = await req.json();
+          const requiredCheck = validateRequired(body, [
+            "code",
+            "type",
+            "amount",
+            "maxRedemptions",
+          ]);
+          if (!requiredCheck.valid) {
+            return badRequest(requiredCheck.error!, corsHeaders);
+          }
+
+          const {
+            code,
+            type,
+            amount,
+            eventId,
+            maxRedemptions,
+            expiresAt,
+            active = true,
+          } = body;
+
+          // Normalize code to uppercase
+          const normalizedCode = code.toUpperCase();
+
+          // Validate type
+          if (!["percent", "fixed", "free"].includes(type)) {
+            return badRequest(
+              "Invalid type. Must be 'percent', 'fixed', or 'free'",
+              corsHeaders,
+            );
+          }
+
+          // Validate amount
+          const amountCheck = validateNumber(amount, { min: 0 });
+          if (!amountCheck.valid) {
+            return badRequest(
+              `Invalid amount: ${amountCheck.error}`,
+              corsHeaders,
+            );
+          }
+
+          // Validate maxRedemptions
+          const maxRedemptionsCheck = validateNumber(maxRedemptions, {
+            min: 1,
+            integer: true,
+          });
+          if (!maxRedemptionsCheck.valid) {
+            return badRequest(
+              `Invalid maxRedemptions: ${maxRedemptionsCheck.error}`,
+              corsHeaders,
+            );
+          }
+
+          // Validate eventId if provided
+          if (eventId) {
+            const eventUuidCheck = validateUuid(eventId);
+            if (!eventUuidCheck.valid) {
+              return badRequest("Invalid event ID", corsHeaders);
+            }
+          }
+
+          // Validate expiresAt if provided
+          if (expiresAt) {
+            const dateCheck = validateDateString(expiresAt);
+            if (!dateCheck.valid) {
+              return badRequest(
+                `Invalid expiration date: ${dateCheck.error}`,
+                corsHeaders,
+              );
+            }
+          }
+
+          console.log(`🎁 Creating promo code: ${normalizedCode}`);
+
+          const { data, error } = await supabaseAdmin
+            .from("promo_codes")
+            .insert({
+              code: normalizedCode,
+              type,
+              amount: amountCheck.value!,
+              event_id: eventId || null,
+              max_redemptions: maxRedemptionsCheck.value!,
+              expires_at: expiresAt || null,
+              active,
+              created_by: userId,
+            })
+            .select()
+            .single();
+
+          if (error) {
+            console.error("❌ Error creating promo code:", error);
+            // Check for unique constraint violation
+            if (error.code === "23505") {
+              return badRequest("Promo code already exists", corsHeaders);
+            }
+            return serverError(error, corsHeaders);
+          }
+
+          console.log("✅ Promo code created:", data.id);
+          return json({ promoCode: data }, 201, corsHeaders);
+        },
+      },
+
+      // GET /promo-codes - List all promo codes
+      {
+        pattern: /^\/promo-codes$/,
+        method: "GET",
+        handler: async (_req, _userId, _match, supabaseAdmin, corsHeaders) => {
+          console.log("📋 Fetching all promo codes");
+
+          const { data, error } = await supabaseAdmin
+            .from("promo_codes")
+            .select("*, events(name), profiles:created_by(full_name)")
+            .order("created_at", { ascending: false });
+
+          if (error) {
+            console.error("❌ Error fetching promo codes:", error);
+            return serverError(error, corsHeaders);
+          }
+
+          console.log(`✅ Fetched ${data.length} promo codes`);
+          return json({ promoCodes: data }, 200, corsHeaders);
+        },
+      },
+
+      // PUT /promo-codes/:promoCodeId - Update promo code
+      {
+        pattern: /^\/promo-codes\/([a-f0-9-]+)$/,
+        method: "PUT",
+        handler: async (req, _userId, match, supabaseAdmin, corsHeaders) => {
+          const promoCodeId = match[1];
+          const uuidCheck = validateUuid(promoCodeId);
+          if (!uuidCheck.valid) {
+            return badRequest("Invalid promo code ID", corsHeaders);
+          }
+
+          const body = await req.json();
+
+          // Build update payload
+          const updatePayload: Record<string, unknown> = {};
+
+          if (body.active !== undefined) {
+            updatePayload.active = body.active;
+          }
+
+          if (body.maxRedemptions !== undefined) {
+            const maxRedemptionsCheck = validateNumber(body.maxRedemptions, {
+              min: 1,
+              integer: true,
+            });
+            if (!maxRedemptionsCheck.valid) {
+              return badRequest(
+                `Invalid maxRedemptions: ${maxRedemptionsCheck.error}`,
+                corsHeaders,
+              );
+            }
+            updatePayload.max_redemptions = maxRedemptionsCheck.value;
+          }
+
+          if (body.expiresAt !== undefined) {
+            if (body.expiresAt === null) {
+              updatePayload.expires_at = null;
+            } else {
+              const dateCheck = validateDateString(body.expiresAt);
+              if (!dateCheck.valid) {
+                return badRequest(
+                  `Invalid expiration date: ${dateCheck.error}`,
+                  corsHeaders,
+                );
+              }
+              updatePayload.expires_at = body.expiresAt;
+            }
+          }
+
+          if (Object.keys(updatePayload).length === 0) {
+            return badRequest("No valid fields to update", corsHeaders);
+          }
+
+          console.log(`🔧 Updating promo code: ${promoCodeId}`);
+
+          const { data, error } = await supabaseAdmin
+            .from("promo_codes")
+            .update(updatePayload)
+            .eq("id", promoCodeId)
+            .select()
+            .single();
+
+          if (error) {
+            console.error("❌ Error updating promo code:", error);
+            return serverError(error, corsHeaders);
+          }
+
+          console.log("✅ Promo code updated");
+          return json({ promoCode: data }, 200, corsHeaders);
+        },
+      },
+
+      // DELETE /promo-codes/:promoCodeId - Delete promo code
+      {
+        pattern: /^\/promo-codes\/([a-f0-9-]+)$/,
+        method: "DELETE",
+        handler: async (_req, _userId, match, supabaseAdmin, corsHeaders) => {
+          const promoCodeId = match[1];
+          const uuidCheck = validateUuid(promoCodeId);
+          if (!uuidCheck.valid) {
+            return badRequest("Invalid promo code ID", corsHeaders);
+          }
+
+          console.log(`🗑️ Deleting promo code: ${promoCodeId}`);
+
+          const { error } = await supabaseAdmin
+            .from("promo_codes")
+            .delete()
+            .eq("id", promoCodeId);
+
+          if (error) {
+            console.error("❌ Error deleting promo code:", error);
+            return serverError(error, corsHeaders);
+          }
+
+          console.log("✅ Promo code deleted");
+          return json({ success: true }, 200, corsHeaders);
+        },
+      },
+
+      // POST /comp-ticket - Issue comp ticket
+      {
+        pattern: /^\/comp-ticket$/,
+        method: "POST",
+        handler: async (req, userId, _match, supabaseAdmin, corsHeaders) => {
+          const body = await req.json();
+          const requiredCheck = validateRequired(body, [
+            "eventId",
+            "targetUserId",
+          ]);
+          if (!requiredCheck.valid) {
+            return badRequest(requiredCheck.error!, corsHeaders);
+          }
+
+          const { eventId, targetUserId } = body;
+
+          // Validate IDs
+          const eventUuidCheck = validateUuid(eventId);
+          if (!eventUuidCheck.valid) {
+            return badRequest("Invalid event ID", corsHeaders);
+          }
+
+          const userUuidCheck = validateUuid(targetUserId);
+          if (!userUuidCheck.valid) {
+            return badRequest("Invalid user ID", corsHeaders);
+          }
+
+          console.log(
+            `🎁 Issuing comp ticket: event=${eventId}, user=${targetUserId}`,
+          );
+
+          // Check if user already has a ticket
+          const { data: existingTicket } = await supabaseAdmin
+            .from("tickets")
+            .select("id")
+            .eq("user_id", targetUserId)
+            .eq("event_id", eventId)
+            .eq("status", "active")
+            .maybeSingle();
+
+          if (existingTicket) {
+            return badRequest(
+              "User already has a ticket for this event",
+              corsHeaders,
+            );
+          }
+
+          // Check event exists and has capacity
+          const { data: event, error: eventError } = await supabaseAdmin
+            .from("events")
+            .select("capacity, attendees, name")
+            .eq("id", eventId)
+            .single();
+
+          if (eventError || !event) {
+            return notFound("Event not found", corsHeaders);
+          }
+
+          if (event.attendees >= event.capacity) {
+            return badRequest("Event is sold out", corsHeaders);
+          }
+
+          // Create comp ticket
+          const { data: newTicket, error: ticketError } = await supabaseAdmin
+            .from("tickets")
+            .insert({
+              user_id: targetUserId,
+              event_id: eventId,
+              payment_amount: 0,
+              stripe_payment_intent_id: `admin_comp_${Date.now()}`,
+              status: "active",
+              source: "admin_comp",
+              promo_code_id: null,
+            })
+            .select()
+            .single();
+
+          if (ticketError) {
+            console.error("❌ Error creating comp ticket:", ticketError);
+            return serverError(ticketError, corsHeaders);
+          }
+
+          // Increment event attendees
+          const { error: updateError } = await supabaseAdmin
+            .from("events")
+            .update({ attendees: event.attendees + 1 })
+            .eq("id", eventId);
+
+          if (updateError) {
+            console.warn("⚠️ Failed to update attendees:", updateError);
+          }
+
+          console.log("✅ Comp ticket issued:", newTicket.id);
+          return json({ ticket: newTicket }, 201, corsHeaders);
         },
       },
     ];
