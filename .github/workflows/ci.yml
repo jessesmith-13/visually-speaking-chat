@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main, feature]
+    branches: [main, feature, test]
   pull_request:
-    branches: [main, feature]
+    branches: [main, feature, test]
 
 jobs:
   test:
@@ -25,20 +25,16 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
-        working-directory: ./web
         run: npm ci
 
       - name: Type check
-        working-directory: ./web
-        run: npm run type-check
+        run: npm run type-check --workspace=web
 
       - name: Run tests
-        working-directory: ./web
-        run: npm run test -- --run
+        run: npm run test --workspace=web -- --run
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Build
-        working-directory: ./web
-        run: npm run build
+        run: npm run build --workspace=web
