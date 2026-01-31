@@ -12,6 +12,7 @@ import {
   PhoneOff,
 } from "lucide-react";
 import { useApp } from "@/app/hooks";
+import { useHasTicket } from "@/features/tickets/hooks";
 import { DailyVideoChat } from "@/features/matchmaking/components/DailyVideoChat";
 import { matchmaking } from "@/lib/edge/client";
 import { supabase } from "@/lib/supabase/client";
@@ -35,8 +36,7 @@ export function VideoRoomRoute() {
   const pollingRef = useRef<number | null>(null);
   const handleNextRef = useRef<(() => Promise<void>) | null>(null); // Store handleNext reference
 
-  const hasTicket =
-    user?.purchasedTickets.includes(currentEvent?.id || "") || false;
+  const hasTicket = useHasTicket(currentEvent?.id || "");
   const isAdmin = user?.isAdmin || false;
   const canJoinEvent = hasTicket || isAdmin;
 

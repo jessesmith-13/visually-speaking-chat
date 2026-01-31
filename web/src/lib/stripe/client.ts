@@ -8,6 +8,7 @@ export const STRIPE_PUBLISHABLE_KEY =
 export interface CreatePaymentIntentRequest {
   eventId: string;
   amount: number;
+  promoCodeId?: string;
 }
 
 export interface CreatePaymentIntentResponse {
@@ -33,7 +34,11 @@ export async function createCheckoutSession(
   request: CreatePaymentIntentRequest,
 ): Promise<CreateCheckoutResponse> {
   const { tickets } = await import("@/lib/edge/client");
-  return await tickets.createPaymentIntent(request.eventId, request.amount);
+  return await tickets.createPaymentIntent(
+    request.eventId,
+    request.amount,
+    request.promoCodeId,
+  );
 }
 
 // Alias for backwards compatibility

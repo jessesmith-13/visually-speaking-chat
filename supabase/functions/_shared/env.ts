@@ -30,14 +30,22 @@ export const JWT_SECRET = mustGetEnv("JWT_SECRET");
 export const ENVIRONMENT = Deno.env.get("ENVIRONMENT") || "development";
 
 /**
- * Get the "from" email address based on environment
- * - development: Uses Resend's test email (no verification needed)
- * - production: Uses verified custom domain
+ * safety override:
+ * If set AND not production, all outgoing email recipients should be overridden
+ * to this address in send-email.ts.
+ *
+ * Example: DEV_EMAIL_OVERRIDE="kellie@visuallyspeaking.info"
+ */
+export const DEV_EMAIL_OVERRIDE = Deno.env.get("DEV_EMAIL_OVERRIDE") || "";
+
+/**
+ * "From" email: use your verified domain in ALL envs.
+ * This avoids Resend "testing-only" restrictions.
+ *
+ * NOTE:
+ * - The mailbox doesn't have to exist for sending, but it's nicer if it does.
+ * - Use a role inbox like no-reply@ or hello@ rather than a personal email.
  */
 export function getFromEmail(): string {
-  if (ENVIRONMENT === "production") {
-    return "Visually Speaking <kellie@visuallyspeaking.info>";
-  }
-  // Development & Test - use Resend's onboarding email
-  return "Visually Speaking <onboarding@resend.dev>";
+  return "Visually Speaking <no-reply@visuallyspeaking.info>";
 }

@@ -40,6 +40,7 @@ if (STRIPE_SECRET_KEY) {
 interface CreatePaymentIntentBody extends Record<string, unknown> {
   eventId: string;
   amount: number;
+  promoCodeId?: string; // ← NEW
 }
 
 interface PurchaseTicketBody extends Record<string, unknown> {
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
             return badRequest(requiredCheck.error!, corsHeaders);
           }
 
-          const { eventId, amount } = body;
+          const { eventId, amount, promoCodeId } = body;
 
           console.log(
             `💳 Creating Stripe Checkout Session: event=${eventId}, amount=$${amount}`,
@@ -148,9 +149,88 @@ Deno.serve(async (req) => {
             return badRequest("Event is sold out", corsHeaders);
           }
 
-          // Verify amount matches
-          const expectedAmount = Math.round(event.price * 100);
+          // Verify amount matches (with promo code support)
+          let expectedAmount = Math.round(event.price * 100);
+
+          // If promo code provided, validate and recalculate
+          if (promoCodeId) {
+            console.log(`🎟️ Validating promo code: ${promoCodeId}`);
+
+            const { data: promo, error: promoError } = await supabaseAdmin
+              .from("promo_codes")
+              .select(
+                "id, type, amount, event_id, max_redemptions, redeemed_count, expires_at, active",
+              )
+              .eq("id", promoCodeId)
+              .single();
+
+            if (promoError || !promo) {
+              return badRequest("Invalid promo code", corsHeaders);
+            }
+
+            // Validate promo code
+            if (!promo.active) {
+              return badRequest("This promo code is inactive", corsHeaders);
+            }
+
+            if (promo.expires_at && new Date(promo.expires_at) < new Date()) {
+              return badRequest("This promo code has expired", corsHeaders);
+            }
+
+            if (promo.redeemed_count >= promo.max_redemptions) {
+              return badRequest(
+                "This promo code has been fully redeemed",
+                corsHeaders,
+              );
+            }
+
+            if (promo.event_id && promo.event_id !== eventId) {
+              return badRequest(
+                "This promo code is not valid for this event",
+                corsHeaders,
+              );
+            }
+
+            // Check if user already used this code for this event
+            const { data: existingRedemption } = await supabaseAdmin
+              .from("promo_redemptions")
+              .select("id")
+              .eq("promo_code_id", promo.id)
+              .eq("user_id", userId)
+              .eq("event_id", eventId)
+              .maybeSingle();
+
+            if (existingRedemption) {
+              return badRequest(
+                "You have already used this promo code for this event",
+                corsHeaders,
+              );
+            }
+
+            // Recalculate expected amount with discount
+            let finalPrice = event.price;
+            const discountType = promo.type as string;
+            const discountAmount = promo.amount as number;
+
+            if (discountType === "free" || discountAmount >= 100) {
+              finalPrice = 0;
+            } else if (discountType === "percent") {
+              finalPrice = event.price * (1 - discountAmount / 100);
+            } else if (discountType === "fixed") {
+              finalPrice = Math.max(0, event.price - discountAmount);
+            }
+
+            expectedAmount = Math.round(finalPrice * 100);
+
+            console.log(
+              `💰 Promo applied: ${discountType} ${discountAmount}% - Original: $${event.price}, Discounted: $${finalPrice}`,
+            );
+          }
+
           if (amount !== expectedAmount) {
+            console.error(
+              `❌ Amount mismatch: expected ${expectedAmount}, got ${amount}`,
+            );
             return badRequest("Amount mismatch", corsHeaders);
           }
 
@@ -209,6 +289,7 @@ Deno.serve(async (req) => {
               eventId,
               userId,
               eventName: event.name,
+              ...(promoCodeId && { promoCodeId }), // ← ADD PROMO CODE ID
             },
           });
 
@@ -253,6 +334,8 @@ Deno.serve(async (req) => {
 
           // Verify payment with Stripe (if not demo mode)
           let actualPaymentIntentId = paymentIntentId; // Will be updated if we get a session ID
+          let actualAmountPaid = amount; // Will be updated from Stripe session
+
           if (!isDemoMode && paymentIntentId && stripe) {
             try {
               // If it's a checkout session (starts with cs_), verify the session
@@ -269,17 +352,49 @@ Deno.serve(async (req) => {
                   return badRequest("Payment not completed", corsHeaders);
                 }
 
-                // Verify amount (compare cents to cents)
+                // ✅ Use the amount from Stripe as source of truth (ignore frontend amount)
                 const paidAmountInCents = session.amount_total || 0;
-                if (Math.abs(paidAmountInCents - amount) > 0.01) {
-                  console.error(
-                    "❌ Amount mismatch:",
-                    paidAmountInCents,
-                    "cents vs",
-                    amount,
-                    "cents",
-                  );
-                  return badRequest("Payment amount mismatch", corsHeaders);
+                actualAmountPaid = paidAmountInCents; // Store for ticket creation
+
+                console.log(
+                  `💰 Stripe session paid: ${paidAmountInCents} cents ($${paidAmountInCents / 100})`,
+                );
+
+                // Extract promo code ID from session metadata if present
+                const promoCodeId = session.metadata?.promoCodeId;
+                if (promoCodeId) {
+                  console.log(`🎟️ Promo code used: ${promoCodeId}`);
+
+                  // Record promo redemption
+                  try {
+                    const { data: promo } = await supabaseAdmin
+                      .from("promo_codes")
+                      .select("id, redeemed_count")
+                      .eq("id", promoCodeId)
+                      .single();
+
+                    if (promo) {
+                      // Update redemption count
+                      await supabaseAdmin
+                        .from("promo_codes")
+                        .update({ redeemed_count: promo.redeemed_count + 1 })
+                        .eq("id", promoCodeId);
+
+                      // Record redemption
+                      await supabaseAdmin.from("promo_redemptions").insert({
+                        promo_code_id: promoCodeId,
+                        user_id: userId,
+                        event_id: eventId,
+                      });
+
+                      console.log("✅ Promo redemption recorded");
+                    }
+                  } catch (error) {
+                    console.warn(
+                      "⚠️ Could not record promo redemption:",
+                      error,
+                    );
+                  }
                 }
 
                 // Extract the actual payment intent ID from the session
@@ -387,7 +502,7 @@ Deno.serve(async (req) => {
             .insert({
               user_id: userId,
               event_id: eventId,
-              payment_amount: amount / 100, // Convert cents to dollars
+              payment_amount: actualAmountPaid / 100, // Convert cents to dollars
               stripe_payment_intent_id:
                 actualPaymentIntentId || `demo_${Date.now()}`,
               status: "active",

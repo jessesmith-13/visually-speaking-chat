@@ -124,10 +124,14 @@ export function EventDetailRoute() {
       console.log(
         `💰 Amount: $${finalAmount / 100} (original: $${currentEvent.price}, discount: $${discountAmount / 100})`,
       );
+      if (promoCodeData?.promoCodeId) {
+        console.log(`🎟️ Promo Code ID: ${promoCodeData.promoCodeId}`);
+      }
 
       const { checkoutUrl } = await createCheckoutSession({
         eventId: currentEvent.id,
         amount: finalAmount,
+        promoCodeId: promoCodeData?.promoCodeId,
       });
 
       console.log("✅ Redirecting to Stripe Checkout...");
