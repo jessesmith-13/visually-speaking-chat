@@ -25,17 +25,20 @@ jobs:
           cache: "npm"
 
       - name: Install dependencies
+        working-directory: ./web
         run: npm ci
 
       - name: Type check
+        working-directory: ./web
         run: npm run type-check
 
       - name: Run tests
+        working-directory: ./web
         run: npm run test -- --run
         env:
-          # Supabase test environment variables (use GitHub Secrets for real values)
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Build
+        working-directory: ./web
         run: npm run build
