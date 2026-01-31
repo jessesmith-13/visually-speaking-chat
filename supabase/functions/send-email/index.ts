@@ -20,7 +20,12 @@ import {
   validateString,
   sanitizeText,
 } from "../_shared/validate.ts";
-import { RESEND_API_KEY, getFromEmail } from "../_shared/env.ts";
+import {
+  RESEND_API_KEY,
+  getFromEmail,
+  ENVIRONMENT,
+  DEV_EMAIL_OVERRIDE,
+} from "../_shared/env.ts";
 
 interface EmailRequest {
   to: string | string[];
@@ -87,6 +92,17 @@ Deno.serve(async (req) => {
 
     const emailList = emailCheck.emails!;
 
+    const finalEmailList =
+      ENVIRONMENT !== "production" && DEV_EMAIL_OVERRIDE
+        ? [DEV_EMAIL_OVERRIDE]
+        : emailList;
+
+    if (finalEmailList.length !== emailList.length) {
+      console.log(
+        `🧪 Dev mode: overriding recipients (${emailList.length}) -> (${finalEmailList.length}) to ${DEV_EMAIL_OVERRIDE}`,
+      );
+    }
+
     console.log("📧 Sending email:", {
       to: emailList.length,
       subject: body.subject,
@@ -97,7 +113,7 @@ Deno.serve(async (req) => {
     let failed = 0;
     const errors: string[] = [];
 
-    for (const email of emailList) {
+    for (const email of finalEmailList) {
       try {
         const response = await fetch("https://api.resend.com/emails", {
           method: "POST",

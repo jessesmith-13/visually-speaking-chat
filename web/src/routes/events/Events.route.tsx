@@ -39,6 +39,203 @@ import { EditEventDialog } from "./components/EditEventDialog";
 import { Pagination } from "@/components/common/Pagination";
 import { usePagination } from "@/features/events/hooks";
 
+// Helper component to check ticket ownership for a specific event
+function EventCard({
+  event,
+  onEventClick,
+  onJoinEvent,
+  onEditEvent,
+  onCancelEvent,
+  deletingEventId,
+  user,
+}: {
+  event: Event;
+  onEventClick: (event: Event) => void;
+  onJoinEvent: (event: Event, e: React.MouseEvent) => void;
+  onEditEvent: (event: Event, e: React.MouseEvent) => void;
+  onCancelEvent: (event: Event, e: React.MouseEvent) => void;
+  deletingEventId: string | null;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    purchasedTickets: string[];
+    isAdmin: boolean;
+  } | null;
+}) {
+  const hasTicket = user?.purchasedTickets.includes(event.id) || false;
+  const canJoinEvent = hasTicket || user?.isAdmin || false;
+
+  const isEventLive = () => {
+    const now = new Date();
+    const eventStart = new Date(event.date);
+    const eventEnd = new Date(eventStart.getTime() + event.duration * 60000);
+    return now >= eventStart && now <= eventEnd;
+  };
+
+  const isEventPast = () => {
+    const now = new Date();
+    const eventEnd = new Date(
+      new Date(event.date).getTime() + event.duration * 60000,
+    );
+    return now > eventEnd;
+  };
+
+  const isEventUpcoming = () => {
+    const now = new Date();
+    const eventStart = new Date(event.date);
+    return now < eventStart;
+  };
+
+  return (
+    <Card
+      className="cursor-pointer hover:shadow-lg transition-shadow"
+      onClick={() => onEventClick(event)}
+    >
+      {event.imageUrl && (
+        <div className="h-48 overflow-hidden rounded-t-lg">
+          <img
+            src={event.imageUrl}
+            alt={event.name}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+      <CardHeader>
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <CardTitle className="text-xl">{event.name}</CardTitle>
+          <div className="flex flex-wrap gap-2">
+            {/* Event Type Badge */}
+            <Badge
+              variant="secondary"
+              className={
+                event.eventType === "in-person"
+                  ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 flex items-center gap-1"
+                  : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 flex items-center gap-1"
+              }
+            >
+              {event.eventType === "in-person" ? (
+                <>
+                  <MapPin className="size-3" />
+                  In-Person
+                </>
+              ) : (
+                <>
+                  <Video className="size-3" />
+                  Virtual
+                </>
+              )}
+            </Badge>
+
+            {event.status === "cancelled" && (
+              <Badge
+                variant="secondary"
+                className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
+              >
+                Cancelled
+              </Badge>
+            )}
+            {isEventPast() && event.status !== "cancelled" && (
+              <Badge
+                variant="secondary"
+                className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100"
+              >
+                Past Event
+              </Badge>
+            )}
+            {isEventLive() && event.status !== "cancelled" && (
+              <Badge variant="destructive" className="animate-pulse">
+                LIVE
+              </Badge>
+            )}
+            {hasTicket && <Badge variant="default">Ticket Owned</Badge>}
+            {user?.isAdmin && !hasTicket && (
+              <Badge
+                variant="default"
+                className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100"
+              >
+                👑 Admin
+              </Badge>
+            )}
+          </div>
+        </div>
+        <CardDescription
+          className="line-clamp-2 prose prose-sm dark:prose-invert max-w-none"
+          dangerouslySetInnerHTML={{ __html: event.description }}
+        />
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex items-center gap-2 text-sm">
+          <Calendar className="size-4 text-gray-500" />
+          <span>{format(new Date(event.date), "PPP")}</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <Clock className="size-4 text-gray-500" />
+          <span>
+            {format(new Date(event.date), "p")} ({event.duration} min)
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-sm">
+          <Users className="size-4 text-gray-500" />
+          <span>
+            {event.attendees} / {event.capacity} attendees
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <DollarSign className="size-4 text-gray-500" />
+          <span>${event.price}</span>
+        </div>
+      </CardContent>
+      <CardFooter>
+        <div className="w-full flex flex-col gap-2">
+          {canJoinEvent ? (
+            <Button
+              className="w-full"
+              onClick={(e) => onJoinEvent(event, e)}
+              disabled={
+                event.status === "cancelled" ||
+                isEventPast() ||
+                isEventUpcoming()
+              }
+            >
+              {isEventLive() ? "Join Now" : "Show Details"}
+            </Button>
+          ) : (
+            <Button className="w-full" variant="outline" disabled={!user}>
+              View Details
+            </Button>
+          )}
+          {user?.isAdmin && (
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                variant="outline"
+                size="sm"
+                onClick={(e) => onEditEvent(event, e)}
+              >
+                <Edit className="size-4 mr-2" />
+                Edit
+              </Button>
+              {event.status !== "cancelled" && (
+                <Button
+                  className="flex-1"
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e) => onCancelEvent(event, e)}
+                  disabled={deletingEventId === event.id}
+                >
+                  <Trash2 className="size-4 mr-2" />
+                  {deletingEventId === event.id ? "Cancelling..." : "Cancel"}
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      </CardFooter>
+    </Card>
+  );
+}
+
 export function EventsRoute() {
   const navigate = useNavigate();
   const { events, user, setCurrentEvent, removeEvent, refreshEvents } =
@@ -93,14 +290,6 @@ export function EventsRoute() {
     setEditingEvent(event);
   };
 
-  const hasTicket = (eventId: string) => {
-    return user?.purchasedTickets.includes(eventId);
-  };
-
-  const canJoinEvent = (eventId: string) => {
-    return hasTicket(eventId) || user?.isAdmin || false;
-  };
-
   // Helper functions for event status
   const isEventLive = (event: Event) => {
     const now = new Date();
@@ -115,12 +304,6 @@ export function EventsRoute() {
       new Date(event.date).getTime() + event.duration * 60000,
     );
     return now > eventEnd;
-  };
-
-  const isEventUpcoming = (event: Event) => {
-    const now = new Date();
-    const eventStart = new Date(event.date);
-    return now < eventStart;
   };
 
   const filteredEvents = events.filter((event) => {
@@ -231,164 +414,16 @@ export function EventsRoute() {
               </div>
             ) : (
               paginatedEvents.map((event) => (
-                <Card
+                <EventCard
                   key={event.id}
-                  className="cursor-pointer hover:shadow-lg transition-shadow"
-                  onClick={() => handleEventClick(event)}
-                >
-                  {event.imageUrl && (
-                    <div className="h-48 overflow-hidden rounded-t-lg">
-                      <img
-                        src={event.imageUrl}
-                        alt={event.name}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                  )}
-                  <CardHeader>
-                    <div className="flex items-start justify-between gap-2 flex-wrap">
-                      <CardTitle className="text-xl">{event.name}</CardTitle>
-                      <div className="flex flex-wrap gap-2">
-                        {/* Event Type Badge */}
-                        <Badge
-                          variant="secondary"
-                          className={
-                            event.eventType === "in-person"
-                              ? "bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-100 flex items-center gap-1"
-                              : "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100 flex items-center gap-1"
-                          }
-                        >
-                          {event.eventType === "in-person" ? (
-                            <>
-                              <MapPin className="size-3" />
-                              In-Person
-                            </>
-                          ) : (
-                            <>
-                              <Video className="size-3" />
-                              Virtual
-                            </>
-                          )}
-                        </Badge>
-
-                        {event.status === "cancelled" && (
-                          <Badge
-                            variant="secondary"
-                            className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100"
-                          >
-                            Cancelled
-                          </Badge>
-                        )}
-                        {isEventPast(event) && event.status !== "cancelled" && (
-                          <Badge
-                            variant="secondary"
-                            className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-100"
-                          >
-                            Past Event
-                          </Badge>
-                        )}
-                        {isEventLive(event) && event.status !== "cancelled" && (
-                          <Badge
-                            variant="destructive"
-                            className="animate-pulse"
-                          >
-                            LIVE
-                          </Badge>
-                        )}
-                        {hasTicket(event.id) && (
-                          <Badge variant="default">Ticket Owned</Badge>
-                        )}
-                        {user?.isAdmin && !hasTicket(event.id) && (
-                          <Badge
-                            variant="default"
-                            className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100"
-                          >
-                            👑 Admin
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <CardDescription
-                      className="line-clamp-2 prose prose-sm dark:prose-invert max-w-none"
-                      dangerouslySetInnerHTML={{ __html: event.description }}
-                    />
-                  </CardHeader>
-                  <CardContent className="space-y-3">
-                    <div className="flex items-center gap-2 text-sm">
-                      <Calendar className="size-4 text-gray-500" />
-                      <span>{format(new Date(event.date), "PPP")}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Clock className="size-4 text-gray-500" />
-                      <span>
-                        {format(new Date(event.date), "p")} ({event.duration}{" "}
-                        min)
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Users className="size-4 text-gray-500" />
-                      <span>
-                        {event.attendees} / {event.capacity} attendees
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm font-semibold">
-                      <DollarSign className="size-4 text-gray-500" />
-                      <span>${event.price}</span>
-                    </div>
-                  </CardContent>
-                  <CardFooter>
-                    <div className="w-full flex flex-col gap-2">
-                      {canJoinEvent(event.id) ? (
-                        <Button
-                          className="w-full"
-                          onClick={(e) => handleJoinEvent(event, e)}
-                          disabled={
-                            event.status === "cancelled" ||
-                            isEventPast(event) ||
-                            isEventUpcoming(event)
-                          }
-                        >
-                          {isEventLive(event) ? "Join Now" : "Show Details"}
-                        </Button>
-                      ) : (
-                        <Button
-                          className="w-full"
-                          variant="outline"
-                          disabled={!user}
-                        >
-                          View Details
-                        </Button>
-                      )}
-                      {user?.isAdmin && (
-                        <div className="flex gap-2">
-                          <Button
-                            className="flex-1"
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => handleEditEvent(event, e)}
-                          >
-                            <Edit className="size-4 mr-2" />
-                            Edit
-                          </Button>
-                          {event.status !== "cancelled" && (
-                            <Button
-                              className="flex-1"
-                              variant="destructive"
-                              size="sm"
-                              onClick={(e) => handleCancelEvent(event, e)}
-                              disabled={deletingEventId === event.id}
-                            >
-                              <Trash2 className="size-4 mr-2" />
-                              {deletingEventId === event.id
-                                ? "Cancelling..."
-                                : "Cancel"}
-                            </Button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </CardFooter>
-                </Card>
+                  event={event}
+                  onEventClick={handleEventClick}
+                  onJoinEvent={handleJoinEvent}
+                  onEditEvent={handleEditEvent}
+                  onCancelEvent={handleCancelEvent}
+                  deletingEventId={deletingEventId}
+                  user={user}
+                />
               ))
             )}
           </div>

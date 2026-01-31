@@ -279,13 +279,14 @@ export const tickets = {
   async createPaymentIntent(
     eventId: string,
     amount: number,
+    promoCodeId?: string,
   ): Promise<{
     sessionId: string;
     checkoutUrl: string;
   }> {
     return await callEdgeFunction("tickets", "/create-payment-intent", {
       method: "POST",
-      body: { eventId, amount },
+      body: { eventId, amount, promoCodeId },
     });
   },
 
