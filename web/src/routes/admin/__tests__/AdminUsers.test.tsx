@@ -260,8 +260,9 @@ describe("AdminUsersRoute", () => {
 
     renderComponent();
 
+    // Wait for users to load by checking for a specific user email
     await waitFor(() => {
-      expect(screen.getByText("User Management")).toBeInTheDocument();
+      expect(screen.getByText("user1@example.com")).toBeInTheDocument();
     });
 
     const copyEmailsButton = screen.getByText("Copy All Emails");
