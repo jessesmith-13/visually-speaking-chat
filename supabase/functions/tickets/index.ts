@@ -15,7 +15,7 @@
  */
 
 import Stripe from "npm:stripe";
-import QRCode from "qrcode";
+import QRCode from "npm:qrcode";
 import { handleCors } from "../_shared/cors.ts";
 import { createAuthClient, createAdminClient } from "../_shared/supabase.ts";
 import { requireUser } from "../_shared/auth.ts";
