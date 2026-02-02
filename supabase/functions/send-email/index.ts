@@ -26,7 +26,6 @@ import {
   ENVIRONMENT,
   DEV_EMAIL_OVERRIDE,
 } from "../_shared/env.ts";
-import QRCode from "qrcode";
 
 interface EmailRequest {
   to: string | string[];
