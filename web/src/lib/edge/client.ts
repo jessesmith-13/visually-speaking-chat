@@ -59,6 +59,11 @@ interface UpdateEventData {
 // One in-flight promise per request signature
 const inFlight = new Map<string, Promise<unknown>>();
 
+// Export for testing purposes (to clear cache between tests)
+export function clearRequestCache(): void {
+  inFlight.clear();
+}
+
 function stableKey(input: {
   fn: string;
   path: string;
@@ -151,7 +156,13 @@ async function callEdgeFunction<T>(
 
   if (dedupe) {
     inFlight.set(key, promise);
-    promise.finally(() => inFlight.delete(key));
+    // Remove from cache when settled (success or failure)
+    // Catch errors here to prevent unhandled rejection warnings in tests
+    promise
+      .catch(() => {
+        /* errors will be handled by caller */
+      })
+      .finally(() => inFlight.delete(key));
   }
 
   return promise;
