@@ -23,6 +23,7 @@ import { VideoRoomRoute } from "@/routes/video/VideoRoom.route";
 import { AdminUsersRoute } from "@/routes/admin/AdminUsers.route";
 import { AdminEmailRoute } from "@/routes/admin/AdminEmail.route";
 import { PromoCodesRoute } from "@/routes/admin/PromoCodes.route";
+import { CheckIn } from "@/routes/admin/CheckIn.route";
 import { NotFoundRoute } from "@/routes/not-found/NotFound.route";
 
 // Validate environment variables on app startup
@@ -89,6 +90,8 @@ function AppContent() {
           <Route path="/admin/users" element={<AdminUsersRoute />} />
           <Route path="/admin/email" element={<AdminEmailRoute />} />
           <Route path="/admin/promo-codes" element={<PromoCodesRoute />} />
+          <Route path="/admin/check-in" element={<CheckIn />} />
+          <Route path="/admin/check-in/:ticketId" element={<CheckIn />} />
           <Route path="/404" element={<NotFoundRoute />} />
           <Route path="*" element={<Navigate to="/404" replace />} />
         </Routes>

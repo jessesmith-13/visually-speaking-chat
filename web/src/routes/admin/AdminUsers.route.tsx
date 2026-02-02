@@ -1,6 +1,14 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Search, ArrowLeft, Mail, Calendar } from "lucide-react";
+import {
+  User,
+  Search,
+  ArrowLeft,
+  Mail,
+  Calendar,
+  QrCode,
+  Tag,
+} from "lucide-react";
 import { toast } from "sonner";
 import { fetchAllUsers, toggleAdminStatus } from "@/features/admin/api";
 import { UserProfile } from "@/features/admin/types";
@@ -129,6 +137,56 @@ export function AdminUsersRoute() {
             </Badge>
           </div>
         </div>
+
+        {/* Admin Tools */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Admin Tools</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button
+                variant="outline"
+                onClick={() => navigate("/admin/email")}
+                className="justify-start h-auto py-4"
+              >
+                <Mail className="size-5 mr-3" />
+                <div className="text-left">
+                  <div className="font-semibold">Send Email</div>
+                  <div className="text-xs text-muted-foreground">
+                    Bulk email to users
+                  </div>
+                </div>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate("/admin/promo-codes")}
+                className="justify-start h-auto py-4"
+              >
+                <Tag className="size-5 mr-3" />
+                <div className="text-left">
+                  <div className="font-semibold">Promo Codes</div>
+                  <div className="text-xs text-muted-foreground">
+                    Manage discount codes
+                  </div>
+                </div>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate("/admin/check-in")}
+                className="justify-start h-auto py-4"
+              >
+                <QrCode className="size-5 mr-3" />
+                <div className="text-left">
+                  <div className="font-semibold">Check-In</div>
+                  <div className="text-xs text-muted-foreground">
+                    Scan tickets at events
+                  </div>
+                </div>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Search */}
         <Card className="mb-6">

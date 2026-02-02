@@ -77,6 +77,10 @@ vi.mock("@/routes/admin/PromoCodes.route", () => ({
   PromoCodesRoute: () => <div data-testid="promo-codes-route">Promo Codes</div>,
 }));
 
+vi.mock("@/routes/admin/CheckIn.route", () => ({
+  CheckIn: () => <div data-testid="check-in-route">Check In</div>,
+}));
+
 vi.mock("@/routes/not-found/NotFound.route", () => ({
   NotFoundRoute: () => <div data-testid="not-found-route">Not Found</div>,
 }));
@@ -164,6 +168,30 @@ describe("App", () => {
     await waitFor(() => {
       expect(screen.getByTestId("not-found-route")).toBeInTheDocument();
     });
+  });
+
+  it("should render check-in route at /admin/check-in", async () => {
+    window.history.replaceState({}, "", "/admin/check-in");
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("loading")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("check-in-route")).toBeInTheDocument();
+  });
+
+  it("should render check-in route with ticket ID parameter", async () => {
+    window.history.replaceState({}, "", "/admin/check-in/ticket-123");
+
+    render(<App />);
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("loading")).not.toBeInTheDocument();
+    });
+
+    expect(screen.getByTestId("check-in-route")).toBeInTheDocument();
   });
 
   it("should setup global AbortError suppression", () => {

@@ -1,11 +1,22 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import * as api from "../api";
 import { callEdgeFunction } from "@/lib/edge/client";
+import { supabase } from "@/lib/supabase/client";
 import { UserProfile } from "../types";
 
 // Mock the edge function client
 vi.mock("@/lib/edge/client", () => ({
   callEdgeFunction: vi.fn(),
+}));
+
+// Mock Supabase client
+vi.mock("@/lib/supabase/client", () => ({
+  supabase: {
+    from: vi.fn(),
+    functions: {
+      invoke: vi.fn(),
+    },
+  },
 }));
 
 describe("Admin API", () => {
@@ -243,6 +254,191 @@ describe("Admin API", () => {
       const result = await api.sendEmail([], "Subject", "Message");
 
       expect(result.emailsSent).toBe(0);
+    });
+  });
+
+  describe("getTicketDetails", () => {
+    it("should fetch ticket details successfully", async () => {
+      const mockTicketData = {
+        id: "ticket-123",
+        event_id: "event-456",
+        user_id: "user-789",
+        check_in_count: 1,
+        last_checked_in_at: "2026-02-01T10:00:00.000Z",
+        events: {
+          name: "Test Event",
+          date: "2026-02-15T18:00:00.000Z",
+          event_type: "in-person",
+        },
+        profiles: {
+          full_name: "John Doe",
+          email: "john@example.com",
+        },
+      };
+
+      const mockSelect = vi.fn().mockReturnThis();
+      const mockEq = vi.fn().mockReturnThis();
+      const mockSingle = vi.fn().mockResolvedValue({
+        data: mockTicketData,
+        error: null,
+      });
+
+      vi.mocked(supabase.from).mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        single: mockSingle,
+      } as never);
+
+      mockSelect.mockReturnValue({
+        eq: mockEq,
+        single: mockSingle,
+      } as never);
+
+      mockEq.mockReturnValue({
+        single: mockSingle,
+      } as never);
+
+      const result = await api.getTicketDetails("ticket-123");
+
+      expect(supabase.from).toHaveBeenCalledWith("tickets");
+      expect(mockSelect).toHaveBeenCalled();
+      expect(mockEq).toHaveBeenCalledWith("id", "ticket-123");
+      expect(mockSingle).toHaveBeenCalled();
+      expect(result).toEqual(mockTicketData);
+    });
+
+    it("should throw error when ticket not found", async () => {
+      const mockSelect = vi.fn().mockReturnThis();
+      const mockEq = vi.fn().mockReturnThis();
+      const mockSingle = vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: "Ticket not found" },
+      });
+
+      vi.mocked(supabase.from).mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        single: mockSingle,
+      } as never);
+
+      mockSelect.mockReturnValue({
+        eq: mockEq,
+        single: mockSingle,
+      } as never);
+
+      mockEq.mockReturnValue({
+        single: mockSingle,
+      } as never);
+
+      await expect(api.getTicketDetails("invalid-ticket")).rejects.toThrow(
+        "Ticket not found",
+      );
+    });
+
+    it("should throw generic error when data is null without error", async () => {
+      const mockSelect = vi.fn().mockReturnThis();
+      const mockEq = vi.fn().mockReturnThis();
+      const mockSingle = vi.fn().mockResolvedValue({
+        data: null,
+        error: null,
+      });
+
+      vi.mocked(supabase.from).mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        single: mockSingle,
+      } as never);
+
+      mockSelect.mockReturnValue({
+        eq: mockEq,
+        single: mockSingle,
+      } as never);
+
+      mockEq.mockReturnValue({
+        single: mockSingle,
+      } as never);
+
+      await expect(api.getTicketDetails("ticket-123")).rejects.toThrow(
+        "Ticket not found",
+      );
+    });
+  });
+
+  describe("verifyAndCheckInTicket", () => {
+    it("should verify and check in ticket successfully", async () => {
+      const mockResponse = {
+        success: true,
+        ticket: {
+          id: "ticket-123",
+          user_id: "user-789",
+          event_id: "event-456",
+          status: "active",
+          check_in_count: 2,
+          last_checked_in_at: "2026-02-02T10:00:00.000Z",
+        },
+        message: "Ticket checked in successfully",
+      };
+
+      vi.mocked(supabase.functions.invoke).mockResolvedValue({
+        data: mockResponse,
+        error: null,
+      });
+
+      const result = await api.verifyAndCheckInTicket("ticket-123");
+
+      expect(supabase.functions.invoke).toHaveBeenCalledWith("tickets/verify", {
+        body: { ticketId: "ticket-123" },
+        method: "POST",
+      });
+      expect(result).toEqual(mockResponse);
+      expect(result.ticket.check_in_count).toBe(2);
+    });
+
+    it("should throw error when verification fails", async () => {
+      vi.mocked(supabase.functions.invoke).mockResolvedValue({
+        data: null,
+        error: { message: "Ticket already used" },
+      });
+
+      await expect(api.verifyAndCheckInTicket("ticket-123")).rejects.toThrow(
+        "Ticket already used",
+      );
+    });
+
+    it("should throw generic error when data is null without error", async () => {
+      vi.mocked(supabase.functions.invoke).mockResolvedValue({
+        data: null,
+        error: null,
+      });
+
+      await expect(api.verifyAndCheckInTicket("ticket-123")).rejects.toThrow(
+        "Failed to verify ticket",
+      );
+    });
+
+    it("should handle first-time check-in", async () => {
+      const mockResponse = {
+        success: true,
+        ticket: {
+          id: "ticket-new",
+          user_id: "user-new",
+          event_id: "event-new",
+          status: "active",
+          check_in_count: 1,
+          last_checked_in_at: "2026-02-02T14:30:00.000Z",
+        },
+        message: "First check-in",
+      };
+
+      vi.mocked(supabase.functions.invoke).mockResolvedValue({
+        data: mockResponse,
+        error: null,
+      });
+
+      const result = await api.verifyAndCheckInTicket("ticket-new");
+
+      expect(result.ticket.check_in_count).toBe(1);
+      expect(result.message).toBe("First check-in");
     });
   });
 });
