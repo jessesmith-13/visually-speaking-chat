@@ -36,7 +36,9 @@ describe("edge/client", () => {
     global.fetch = vi.fn();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    // Wait for all promises to settle before cleaning up
+    await new Promise((resolve) => setTimeout(resolve, 0));
     vi.restoreAllMocks();
   });
 
@@ -75,9 +77,16 @@ describe("edge/client", () => {
           error: null,
         });
 
-        await expect(adminOperations.getAllUsers()).rejects.toThrow(
-          "No authentication token found",
-        );
+        // Use try-catch to ensure promise is handled
+        try {
+          await adminOperations.getAllUsers();
+          expect.fail("Should have thrown an error");
+        } catch (error) {
+          expect(error).toBeInstanceOf(Error);
+          expect((error as Error).message).toContain(
+            "No authentication token found",
+          );
+        }
       });
     });
 
@@ -778,9 +787,14 @@ describe("edge/client", () => {
         text: async () => "Internal server error",
       } as Response);
 
-      await expect(adminOperations.getAllUsers()).rejects.toThrow(
-        "Internal server error",
-      );
+      // Use try-catch to ensure promise is handled
+      try {
+        await adminOperations.getAllUsers();
+        expect.fail("Should have thrown an error");
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe("Internal server error");
+      }
     });
 
     it("should throw error with status when text fails", async () => {
@@ -790,9 +804,14 @@ describe("edge/client", () => {
         text: vi.fn().mockRejectedValueOnce(new Error("Text parse error")),
       } as Response);
 
-      await expect(adminOperations.getAllUsers()).rejects.toThrow(
-        "Request failed with status 404",
-      );
+      // Use try-catch to ensure promise is handled
+      try {
+        await adminOperations.getAllUsers();
+        expect.fail("Should have thrown an error");
+      } catch (error) {
+        expect(error).toBeInstanceOf(Error);
+        expect((error as Error).message).toBe("Request failed with status 404");
+      }
     });
   });
 
