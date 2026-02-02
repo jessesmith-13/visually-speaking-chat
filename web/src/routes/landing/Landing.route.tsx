@@ -2,32 +2,9 @@ import { Video, Users, Shield, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/ui/button";
 import { Card, CardContent } from "@/ui/card";
-import { testSupabaseConnection } from "@/lib/supabase/test";
-import { toast } from "sonner";
 
 export function LandingRoute() {
   const navigate = useNavigate();
-
-  const handleTestConnection = async () => {
-    toast.loading("Testing Supabase connection...");
-    const result = await testSupabaseConnection();
-
-    if (result.success) {
-      if (result.warning) {
-        toast.warning(result.warning, {
-          description: result.details,
-        });
-      } else {
-        toast.success(result.message, {
-          description: `Table exists: ${result.tableExists}, Authenticated: ${result.authenticated}`,
-        });
-      }
-    } else {
-      toast.error(result.error, {
-        description: result.details,
-      });
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white dark:from-gray-900 dark:to-gray-950">
@@ -52,13 +29,6 @@ export function LandingRoute() {
               onClick={() => navigate("/auth")}
             >
               Get Started
-            </Button>
-          </div>
-
-          {/* Developer Tools */}
-          <div className="mt-8">
-            <Button size="sm" variant="ghost" onClick={handleTestConnection}>
-              🔧 Test Supabase Connection
             </Button>
           </div>
         </div>
