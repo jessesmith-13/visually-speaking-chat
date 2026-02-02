@@ -1,0 +1,3 @@
+-- Placeholder migration to match the linked project's migration history.
+-- The linked Supabase project already has this migration recorded as applied.
+-- This file exists so `supabase db pull` and other CLI operations can proceed.
