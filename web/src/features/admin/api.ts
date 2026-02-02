@@ -148,7 +148,19 @@ export async function getTicketDetails(
     throw new Error(error?.message || "Ticket not found");
   }
 
-  return data as TicketDetails;
+  // Transform the response to match our TicketDetails type
+  // Supabase returns events and profiles as arrays, but we know they're single objects
+  const ticketDetails: TicketDetails = {
+    id: data.id,
+    event_id: data.event_id,
+    user_id: data.user_id,
+    check_in_count: data.check_in_count,
+    last_checked_in_at: data.last_checked_in_at,
+    events: Array.isArray(data.events) ? data.events[0] : data.events,
+    profiles: Array.isArray(data.profiles) ? data.profiles[0] : data.profiles,
+  };
+
+  return ticketDetails;
 }
 
 /**
