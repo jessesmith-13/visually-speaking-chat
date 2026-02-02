@@ -15,6 +15,7 @@
  */
 
 import Stripe from "npm:stripe";
+import QRCode from "qrcode";
 import { handleCors } from "../_shared/cors.ts";
 import { createAuthClient, createAdminClient } from "../_shared/supabase.ts";
 import { requireUser } from "../_shared/auth.ts";
@@ -565,21 +566,28 @@ Deno.serve(async (req) => {
                   minute: "2-digit",
                 });
 
-                // Generate QR code placeholder
-                const qrCodeSVG = `
-                  <svg width="200" height="200" xmlns="http://www.w3.org/2000/svg">
-                    <rect width="200" height="200" fill="white"/>
-                    <text x="100" y="100" text-anchor="middle" font-family="monospace" font-size="12" fill="black">
-                      QR Code Placeholder
-                    </text>
-                    <text x="100" y="120" text-anchor="middle" font-family="monospace" font-size="8" fill="gray">
-                      Ticket ID:
-                    </text>
-                    <text x="100" y="135" text-anchor="middle" font-family="monospace" font-size="8" fill="gray">
-                      ${newTicket.id.slice(0, 8)}...
-                    </text>
-                  </svg>
-                `;
+                // Get origin for QR code URL
+                let origin = req.headers.get("origin");
+                if (!origin) {
+                  const referer = req.headers.get("referer");
+                  if (referer) {
+                    const urlObj = new URL(referer);
+                    origin = `${urlObj.protocol}//${urlObj.host}`;
+                  } else {
+                    origin = "https://visuallyspeaking.com"; // Default to production
+                  }
+                }
+
+                // Generate real QR code with check-in URL
+                const checkInUrl = `${origin}/admin/check-in/${newTicket.id}`;
+                const qrCodeDataURL = await QRCode.toDataURL(checkInUrl, {
+                  width: 300,
+                  margin: 2,
+                  color: {
+                    dark: "#000000",
+                    light: "#FFFFFF",
+                  },
+                });
 
                 // Send email via Resend
                 const emailResponse = await fetch(
@@ -651,7 +659,7 @@ Deno.serve(async (req) => {
                             <h2>Event: ${event.name}</h2>
                             
                             <div class="qr-code">
-                              ${qrCodeSVG}
+                              <img src="${qrCodeDataURL}" alt="QR Code"/>
                               <p style="margin-top: 10px; color: #666; font-size: 14px;">
                                 Present this QR code at the door
                               </p>

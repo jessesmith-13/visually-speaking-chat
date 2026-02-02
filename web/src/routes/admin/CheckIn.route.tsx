@@ -1,0 +1,339 @@
+import { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Html5Qrcode } from "html5-qrcode";
+import { Button } from "@/ui/button";
+import { Card } from "@/ui/card";
+import { CheckCircle, XCircle, Camera, Loader2, ArrowLeft } from "lucide-react";
+import {
+  getTicketDetails,
+  verifyAndCheckInTicket,
+  type TicketDetails,
+} from "@/features/admin/api";
+
+export function CheckIn() {
+  const { ticketId } = useParams<{ ticketId?: string }>();
+  const navigate = useNavigate();
+  const [isScanning, setIsScanning] = useState(false);
+  const [scannerReady, setScannerReady] = useState(false);
+  const [verificationStatus, setVerificationStatus] = useState<
+    "idle" | "loading" | "success" | "error"
+  >("idle");
+  const [ticketDetails, setTicketDetails] = useState<TicketDetails | null>(
+    null,
+  );
+  const [errorMessage, setErrorMessage] = useState<string>("");
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<HTMLDivElement>(null);
+
+  // Function declarations BEFORE useEffect hooks
+  const stopScanner = async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        const html5QrCode = html5QrCodeRef.current;
+        if (html5QrCode.isScanning) {
+          await html5QrCode.stop();
+        }
+        html5QrCode.clear();
+      } catch (error) {
+        console.error("Error stopping scanner:", error);
+      }
+      html5QrCodeRef.current = null;
+    }
+    setIsScanning(false);
+    setScannerReady(false);
+  };
+
+  const verifyTicket = async (ticketId: string) => {
+    setVerificationStatus("loading");
+    setErrorMessage("");
+
+    try {
+      // First, get ticket details with event and user info
+      const ticketData = await getTicketDetails(ticketId);
+      setTicketDetails(ticketData);
+
+      // Call the verify endpoint
+      const result = await verifyAndCheckInTicket(ticketId);
+
+      // Update ticket details with new check-in info
+      setTicketDetails((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          check_in_count: result.ticket.check_in_count,
+          last_checked_in_at: result.ticket.last_checked_in_at,
+        };
+      });
+
+      setVerificationStatus("success");
+    } catch (error) {
+      console.error("Error verifying ticket:", error);
+      setErrorMessage(
+        error instanceof Error ? error.message : "An error occurred",
+      );
+      setVerificationStatus("error");
+    }
+  };
+
+  const resetScanner = () => {
+    setVerificationStatus("idle");
+    setTicketDetails(null);
+    setErrorMessage("");
+    navigate("/admin/check-in");
+  };
+
+  // If ticketId is in URL, verify immediately
+  useEffect(() => {
+    if (!ticketId) return;
+
+    const verify = async () => {
+      setVerificationStatus("loading");
+      setErrorMessage("");
+
+      try {
+        // First, get ticket details with event and user info
+        const ticketData = await getTicketDetails(ticketId);
+        setTicketDetails(ticketData);
+
+        // Call the verify endpoint
+        const result = await verifyAndCheckInTicket(ticketId);
+
+        // Update ticket details with new check-in info
+        setTicketDetails((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            check_in_count: result.ticket.check_in_count,
+            last_checked_in_at: result.ticket.last_checked_in_at,
+          };
+        });
+
+        setVerificationStatus("success");
+      } catch (error) {
+        console.error("Error verifying ticket:", error);
+        setErrorMessage(
+          error instanceof Error ? error.message : "An error occurred",
+        );
+        setVerificationStatus("error");
+      }
+    };
+
+    verify();
+  }, [ticketId]);
+
+  // Cleanup scanner on unmount
+  useEffect(() => {
+    return () => {
+      stopScanner();
+    };
+  }, []);
+
+  const startScanner = async () => {
+    if (!scannerRef.current) return;
+
+    try {
+      setIsScanning(true);
+      setVerificationStatus("idle");
+      setErrorMessage("");
+
+      const html5QrCode = new Html5Qrcode("qr-reader");
+      html5QrCodeRef.current = html5QrCode;
+
+      const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+      };
+
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        async (decodedText: string) => {
+          // Stop scanner immediately
+          await stopScanner();
+
+          // Extract ticket ID from URL
+          const ticketIdMatch = decodedText.match(
+            /\/admin\/check-in\/([a-f0-9-]+)/i,
+          );
+          if (ticketIdMatch) {
+            await verifyTicket(ticketIdMatch[1]);
+          } else {
+            setErrorMessage("Invalid QR code format");
+            setVerificationStatus("error");
+          }
+        },
+        () => {
+          // Ignore scan errors (they happen constantly)
+        },
+      );
+
+      setScannerReady(true);
+    } catch (error) {
+      console.error("Error starting scanner:", error);
+      setErrorMessage("Failed to start camera. Please check permissions.");
+      setVerificationStatus("error");
+      setIsScanning(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 p-6">
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center gap-4 mb-6">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => navigate("/admin/users")}
+          >
+            <ArrowLeft className="size-4 mr-2" />
+            Back to Admin
+          </Button>
+        </div>
+
+        <Card className="p-8 shadow-lg">
+          <h1 className="text-3xl font-bold text-center mb-2">
+            🎟️ Ticket Check-In
+          </h1>
+          <p className="text-center text-muted-foreground mb-8">
+            Scan QR codes to check in attendees
+          </p>
+
+          {verificationStatus === "idle" && !isScanning && (
+            <div className="text-center">
+              <Button
+                size="lg"
+                onClick={startScanner}
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                <Camera className="size-5 mr-2" />
+                Start Scanning
+              </Button>
+            </div>
+          )}
+
+          {isScanning && (
+            <div className="space-y-4">
+              <div
+                id="qr-reader"
+                ref={scannerRef}
+                className="border-2 border-indigo-600 rounded-lg overflow-hidden"
+              />
+              {!scannerReady && (
+                <div className="flex items-center justify-center gap-2 text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  <span>Initializing camera...</span>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                onClick={stopScanner}
+                className="w-full"
+              >
+                Stop Scanning
+              </Button>
+            </div>
+          )}
+
+          {verificationStatus === "loading" && (
+            <div className="flex flex-col items-center gap-4">
+              <Loader2 className="size-12 animate-spin text-indigo-600" />
+              <p className="text-lg text-muted-foreground">
+                Verifying ticket...
+              </p>
+            </div>
+          )}
+
+          {verificationStatus === "success" && ticketDetails && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-center gap-3 text-green-600 dark:text-green-400">
+                <CheckCircle className="size-16" />
+                <div>
+                  <h2 className="text-2xl font-bold">Valid Ticket!</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Checked in successfully
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-6 space-y-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Event</p>
+                  <p className="font-semibold text-lg">
+                    {ticketDetails.events.name}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Attendee</p>
+                  <p className="font-semibold">
+                    {ticketDetails.profiles.full_name}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {ticketDetails.profiles.email}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Check-in Info</p>
+                  <p className="text-sm">
+                    Check-in count: {ticketDetails.check_in_count}
+                  </p>
+                  {ticketDetails.last_checked_in_at && (
+                    <p className="text-sm">
+                      Last checked in:{" "}
+                      {new Date(
+                        ticketDetails.last_checked_in_at,
+                      ).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+
+                {ticketDetails.check_in_count > 1 && (
+                  <div className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 rounded p-3">
+                    <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                      ⚠️ This ticket has been checked in{" "}
+                      {ticketDetails.check_in_count} times
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <Button onClick={resetScanner} className="w-full">
+                Scan Next Ticket
+              </Button>
+            </div>
+          )}
+
+          {verificationStatus === "error" && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-center gap-3 text-red-600 dark:text-red-400">
+                <XCircle className="size-16" />
+                <div>
+                  <h2 className="text-2xl font-bold">Invalid Ticket</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Could not verify ticket
+                  </p>
+                </div>
+              </div>
+
+              <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800 rounded-lg p-6">
+                <p className="text-red-800 dark:text-red-200">{errorMessage}</p>
+              </div>
+
+              <Button onClick={resetScanner} className="w-full">
+                Try Again
+              </Button>
+            </div>
+          )}
+        </Card>
+
+        <div className="mt-6 text-center text-sm text-muted-foreground">
+          <p>Ticket check-in system for in-person events</p>
+          <p className="mt-2">
+            Attendees should present their QR code from their email
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}

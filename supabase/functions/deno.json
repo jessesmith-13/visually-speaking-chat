@@ -7,6 +7,7 @@
   "imports": {
     "@supabase/supabase-js": "npm:@supabase/supabase-js@^2.39.0",
     "stripe": "npm:stripe@^14.0.0",
-    "jose": "npm:jose@^5.0.0"
+    "jose": "npm:jose@^5.0.0",
+    "qrcode": "npm:qrcode@^1.5.3"
   }
 }
