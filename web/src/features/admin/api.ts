@@ -148,8 +148,29 @@ export async function getTicketDetails(
     throw new Error(error?.message || "Ticket not found");
   }
 
-  // With !inner, Supabase returns events and profiles as SINGLE OBJECTS
-  return data as TicketDetails;
+  // TypeScript doesn't know about !inner, so we need to transform the data
+  // Supabase STILL returns events/profiles as arrays even with !inner in TypeScript's view
+  const rawData = data as unknown as {
+    id: string;
+    event_id: string;
+    user_id: string;
+    check_in_count: number;
+    last_checked_in_at: string | null;
+    events: { name: string; date: string; event_type: string }[];
+    profiles: { full_name: string; email: string }[];
+  };
+
+  return {
+    id: rawData.id,
+    event_id: rawData.event_id,
+    user_id: rawData.user_id,
+    check_in_count: rawData.check_in_count,
+    last_checked_in_at: rawData.last_checked_in_at,
+    events: Array.isArray(rawData.events) ? rawData.events[0] : rawData.events,
+    profiles: Array.isArray(rawData.profiles)
+      ? rawData.profiles[0]
+      : rawData.profiles,
+  };
 }
 
 /**
