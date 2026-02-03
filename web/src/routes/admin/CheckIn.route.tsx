@@ -130,9 +130,13 @@ export function CheckIn() {
 
   const startScanner = async () => {
     try {
+      // First, set state to render the scanner div
       setIsScanning(true);
       setVerificationStatus("idle");
       setErrorMessage("");
+
+      // Wait for next tick to ensure DOM is updated
+      await new Promise((resolve) => setTimeout(resolve, 100));
 
       const html5QrCode = new Html5Qrcode("qr-reader");
       html5QrCodeRef.current = html5QrCode;
@@ -168,7 +172,24 @@ export function CheckIn() {
       setScannerReady(true);
     } catch (error) {
       console.error("Error starting scanner:", error);
-      setErrorMessage("Failed to start camera. Please check permissions.");
+      let errorMsg = "Failed to start camera. ";
+
+      if (error instanceof Error) {
+        if (error.message.includes("Permission")) {
+          errorMsg += "Please allow camera access in your browser settings.";
+        } else if (error.message.includes("NotFound")) {
+          errorMsg += "No camera found on this device.";
+        } else if (error.message.includes("secure")) {
+          errorMsg += "Camera access requires HTTPS or localhost.";
+        } else {
+          errorMsg += error.message;
+        }
+      } else {
+        errorMsg +=
+          "Please check camera permissions and ensure you're using HTTPS.";
+      }
+
+      setErrorMessage(errorMsg);
       setVerificationStatus("error");
       setIsScanning(false);
     }
