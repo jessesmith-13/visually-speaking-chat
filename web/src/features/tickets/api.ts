@@ -148,10 +148,37 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
 
     // Transform the data to match our TicketWithEvent type
     // Supabase returns events as an array, but we need a single object
-    const transformedData = (data || []).map((ticket) => ({
-      ...ticket,
-      events: Array.isArray(ticket.events) ? ticket.events[0] : ticket.events,
-    })) as TicketWithEvent[];
+    type SupabaseTicketResponse = {
+      id: string;
+      user_id: string;
+      event_id: string;
+      status: string;
+      purchased_at: string;
+      check_in_count: number;
+      last_checked_in_at: string | null;
+      events: Array<{
+        id: string;
+        name: string;
+        date: string;
+        event_type: "virtual" | "in-person";
+        venue_name: string | null;
+        venue_address: string | null;
+        status: string;
+      }>;
+    };
+
+    const transformedData: TicketWithEvent[] = (
+      (data as unknown as SupabaseTicketResponse[]) || []
+    ).map((ticket) => ({
+      id: ticket.id,
+      user_id: ticket.user_id,
+      event_id: ticket.event_id,
+      status: ticket.status,
+      purchased_at: ticket.purchased_at,
+      check_in_count: ticket.check_in_count,
+      last_checked_in_at: ticket.last_checked_in_at,
+      events: ticket.events[0],
+    }));
 
     return transformedData;
   } catch (error) {
