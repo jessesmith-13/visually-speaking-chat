@@ -16,6 +16,7 @@ import {
   X,
   Menu,
   Tag,
+  Ticket,
 } from "lucide-react";
 
 export function Header() {
@@ -62,6 +63,15 @@ export function Header() {
                 >
                   <Calendar className="size-4 mr-2" />
                   Events
+                </Button>
+                <Button
+                  variant={
+                    location.pathname === "/tickets" ? "default" : "ghost"
+                  }
+                  onClick={() => handleNavigate("/tickets")}
+                >
+                  <Ticket className="size-4 mr-2" />
+                  My Tickets
                 </Button>
                 {user.isAdmin && (
                   <>
@@ -179,6 +189,15 @@ export function Header() {
               >
                 <Calendar className="size-4 mr-2" />
                 Events
+              </Button>
+
+              <Button
+                variant={location.pathname === "/tickets" ? "default" : "ghost"}
+                onClick={() => handleNavigate("/tickets")}
+                className="justify-start"
+              >
+                <Ticket className="size-4 mr-2" />
+                My Tickets
               </Button>
 
               {user.isAdmin && (

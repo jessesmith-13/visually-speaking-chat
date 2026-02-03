@@ -1,5 +1,6 @@
 import { tickets as ticketsEdgeAPI } from "@/lib/edge/client";
 import { supabase } from "@/lib/supabase/client";
+import type { Ticket } from "./types";
 
 /**
  * Fetch user's tickets (event IDs only) - ACTIVE tickets only
@@ -83,4 +84,70 @@ export async function createPaymentIntent(eventId: string, amount: number) {
  */
 export async function cancelTicket(ticketId: string) {
   return await ticketsEdgeAPI.cancelTicket(ticketId);
+}
+
+/**
+ * Get detailed ticket information with event details for the current user
+ */
+export interface TicketWithEvent extends Ticket {
+  events: {
+    id: string;
+    name: string;
+    date: string;
+    event_type: "virtual" | "in-person";
+    venue_name?: string;
+    venue_address?: string;
+  };
+}
+
+export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
+  try {
+    console.log("🎫 Fetching tickets with event details...");
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      console.log("⚠️ No user found, cannot fetch tickets.");
+      return [];
+    }
+
+    const { data, error } = await supabase
+      .from("tickets")
+      .select(
+        `
+        id,
+        user_id,
+        event_id,
+        status,
+        purchased_at,
+        check_in_count,
+        last_checked_in_at,
+        events!inner (
+          id,
+          name,
+          date,
+          event_type,
+          venue_name,
+          venue_address,
+          status
+        )
+      `,
+      )
+      .eq("user_id", user.id)
+      .eq("status", "active")
+      .neq("events.status", "cancelled") // Filter out cancelled events
+      .order("purchased_at", { ascending: false });
+
+    if (error) {
+      console.error("❌ Error fetching tickets:", error);
+      throw error;
+    }
+
+    console.log("✅ Tickets with details loaded:", data?.length || 0);
+    return data as TicketWithEvent[];
+  } catch (error) {
+    console.error("Error fetching tickets with details:", error);
+    return [];
+  }
 }

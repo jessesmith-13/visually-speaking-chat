@@ -467,7 +467,7 @@ Deno.serve(async (req) => {
           const { data, error } = await supabaseAdmin
             .from("tickets")
             .select(
-              "id, user_id, payment_amount, purchased_at, profiles:user_id(full_name, email)",
+              "id, user_id, payment_amount, purchased_at, check_in_count, last_checked_in_at, profiles:user_id(full_name, email)",
             )
             .eq("event_id", eventId)
             .eq("status", "active");
