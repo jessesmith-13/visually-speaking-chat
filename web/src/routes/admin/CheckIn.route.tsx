@@ -15,6 +15,7 @@ export function CheckIn() {
   const navigate = useNavigate();
   const [isScanning, setIsScanning] = useState(false);
   const [scannerReady, setScannerReady] = useState(false);
+  const [manualTicketId, setManualTicketId] = useState("");
   const [verificationStatus, setVerificationStatus] = useState<
     "idle" | "loading" | "success" | "error"
   >("idle");
@@ -153,14 +154,26 @@ export function CheckIn() {
           // Stop scanner immediately
           await stopScanner();
 
+          // DEBUG: Log what we scanned
+          console.log("🔍 QR Code Scanned:", decodedText);
+
           // Extract ticket ID from URL
           const ticketIdMatch = decodedText.match(
             /\/admin\/check-in\/([a-f0-9-]+)/i,
           );
+          console.log("🎯 Ticket ID Match:", ticketIdMatch);
+
           if (ticketIdMatch) {
+            console.log("✅ Verifying ticket:", ticketIdMatch[1]);
             await verifyTicket(ticketIdMatch[1]);
           } else {
-            setErrorMessage("Invalid QR code format");
+            console.error(
+              "❌ QR pattern didn't match. Full text:",
+              decodedText,
+            );
+            setErrorMessage(
+              `Invalid QR code format. Got: ${decodedText.substring(0, 50)}...`,
+            );
             setVerificationStatus("error");
           }
         },
@@ -218,15 +231,51 @@ export function CheckIn() {
           </p>
 
           {verificationStatus === "idle" && !isScanning && (
-            <div className="text-center">
-              <Button
-                size="lg"
-                onClick={startScanner}
-                className="bg-indigo-600 hover:bg-indigo-700"
-              >
-                <Camera className="size-5 mr-2" />
-                Start Scanning
-              </Button>
+            <div className="space-y-6">
+              <div className="text-center">
+                <Button
+                  size="lg"
+                  onClick={startScanner}
+                  className="bg-indigo-600 hover:bg-indigo-700"
+                >
+                  <Camera className="size-5 mr-2" />
+                  Start Scanning
+                </Button>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-white dark:bg-gray-800 px-2 text-muted-foreground">
+                    Or enter manually
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <input
+                  type="text"
+                  placeholder="Paste ticket ID (e.g., 123e4567-e89b-12d3-a456-426614174000)"
+                  value={manualTicketId}
+                  onChange={(e) => setManualTicketId(e.target.value)}
+                  className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600"
+                />
+                <Button
+                  onClick={() => {
+                    if (manualTicketId.trim()) {
+                      verifyTicket(manualTicketId.trim());
+                      setManualTicketId("");
+                    }
+                  }}
+                  disabled={!manualTicketId.trim()}
+                  className="w-full"
+                  variant="outline"
+                >
+                  Verify Ticket
+                </Button>
+              </div>
             </div>
           )}
 
@@ -278,17 +327,17 @@ export function CheckIn() {
                 <div>
                   <p className="text-sm text-muted-foreground">Event</p>
                   <p className="font-semibold text-lg">
-                    {ticketDetails.events.name}
+                    {ticketDetails.events?.name || "Unknown Event"}
                   </p>
                 </div>
 
                 <div>
                   <p className="text-sm text-muted-foreground">Attendee</p>
                   <p className="font-semibold">
-                    {ticketDetails.profiles.full_name}
+                    {ticketDetails.profiles?.full_name || "Unknown"}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {ticketDetails.profiles.email}
+                    {ticketDetails.profiles?.email || "No email"}
                   </p>
                 </div>
 
