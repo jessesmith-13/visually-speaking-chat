@@ -129,8 +129,6 @@ export function CheckIn() {
   }, []);
 
   const startScanner = async () => {
-    if (!scannerRef.current) return;
-
     try {
       setIsScanning(true);
       setVerificationStatus("idle");
