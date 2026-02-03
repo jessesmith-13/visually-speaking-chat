@@ -283,31 +283,62 @@ export function MyTicketsRoute() {
                       </div>
 
                       {/* QR Code */}
-                      {isInPerson && qrCodes[ticket.id] && (
-                        <div className="flex flex-col items-center">
-                          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                            <img
-                              src={qrCodes[ticket.id]}
-                              alt={`QR code for ${event.name}`}
-                              className="w-48 h-48"
-                            />
-                          </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              downloadQRCode(ticket.id, event.name)
-                            }
-                            className="mt-3"
-                          >
-                            <Download className="size-4 mr-2" />
-                            Download QR
-                          </Button>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2 max-w-[200px]">
-                            Show this QR code at the venue for check-in
-                          </p>
-                        </div>
-                      )}
+                      {isInPerson &&
+                        qrCodes[ticket.id] &&
+                        (() => {
+                          const baseUrl = window.location.origin;
+                          const checkInUrl = `${baseUrl}/admin/check-in/${ticket.id}`;
+                          const isDev = import.meta.env.DEV;
+
+                          return (
+                            <div className="flex flex-col items-center">
+                              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                                <img
+                                  src={qrCodes[ticket.id]}
+                                  alt={`QR code for ${event.name}`}
+                                  className="w-48 h-48"
+                                />
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  downloadQRCode(ticket.id, event.name)
+                                }
+                                className="mt-3"
+                              >
+                                <Download className="size-4 mr-2" />
+                                Download QR
+                              </Button>
+                              {isDev && (
+                                <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-300 dark:border-yellow-700 rounded text-xs max-w-[250px]">
+                                  <p className="font-bold text-yellow-900 dark:text-yellow-100 mb-1">
+                                    🔧 DEV: QR URL
+                                  </p>
+                                  <p className="font-mono text-yellow-800 dark:text-yellow-200 break-all">
+                                    {checkInUrl}
+                                  </p>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      navigator.clipboard.writeText(checkInUrl);
+                                      alert(
+                                        "URL copied! Paste it in /admin/check-in debug box",
+                                      );
+                                    }}
+                                    className="mt-2 w-full text-xs h-7"
+                                  >
+                                    Copy URL
+                                  </Button>
+                                </div>
+                              )}
+                              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2 max-w-[200px]">
+                                Show this QR code at the venue for check-in
+                              </p>
+                            </div>
+                          );
+                        })()}
                     </div>
 
                     {/* Action Buttons */}

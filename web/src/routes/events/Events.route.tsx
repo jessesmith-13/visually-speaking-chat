@@ -195,10 +195,14 @@ function EventCard({
               disabled={
                 event.status === "cancelled" ||
                 isEventPast() ||
-                isEventUpcoming()
+                (event.eventType === "virtual" && isEventUpcoming()) // Only disable virtual events when upcoming
               }
             >
-              {isEventLive() ? "Join Now" : "Show Details"}
+              {event.eventType === "in-person"
+                ? "View Ticket"
+                : isEventLive()
+                  ? "Join Now"
+                  : "Show Details"}
             </Button>
           ) : (
             <Button className="w-full" variant="outline" disabled={!user}>
@@ -258,7 +262,14 @@ export function EventsRoute() {
   const handleJoinEvent = (event: Event, e: React.MouseEvent) => {
     e.stopPropagation();
     setCurrentEvent(event);
-    navigate(`/room/${event.id}`);
+
+    // For in-person events, just go to event details to view ticket
+    if (event.eventType === "in-person") {
+      navigate(`/events/${event.id}`);
+    } else {
+      // For virtual events, join the video room
+      navigate(`/room/${event.id}`);
+    }
   };
 
   const handleCancelEvent = async (event: Event, e: React.MouseEvent) => {
