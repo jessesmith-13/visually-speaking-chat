@@ -147,7 +147,7 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
     console.log("✅ Tickets with details loaded:", data?.length || 0);
 
     // Transform the data to match our TicketWithEvent type
-    // Supabase returns events as an array, but we need a single object
+    // Supabase with !inner returns events as a SINGLE OBJECT, not an array
     type SupabaseTicketResponse = {
       id: string;
       user_id: string;
@@ -156,7 +156,7 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
       purchased_at: string;
       check_in_count: number;
       last_checked_in_at: string | null;
-      events: Array<{
+      events: {
         id: string;
         name: string;
         date: string;
@@ -164,28 +164,32 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
         venue_name: string | null;
         venue_address: string | null;
         status: string;
-      }>;
+      };
     };
 
     const transformedData: TicketWithEvent[] = (
       (data as unknown as SupabaseTicketResponse[]) || []
-    ).map((ticket) => ({
-      id: ticket.id,
-      user_id: ticket.user_id,
-      event_id: ticket.event_id,
-      status: ticket.status,
-      purchased_at: ticket.purchased_at,
-      check_in_count: ticket.check_in_count,
-      last_checked_in_at: ticket.last_checked_in_at ?? undefined,
-      events: {
-        id: ticket.events[0].id,
-        name: ticket.events[0].name,
-        date: ticket.events[0].date,
-        event_type: ticket.events[0].event_type,
-        venue_name: ticket.events[0].venue_name ?? undefined,
-        venue_address: ticket.events[0].venue_address ?? undefined,
-      },
-    }));
+    )
+      .filter((ticket) => ticket.events && typeof ticket.events === "object")
+      .map(
+        (ticket): TicketWithEvent => ({
+          id: ticket.id,
+          user_id: ticket.user_id,
+          event_id: ticket.event_id,
+          status: ticket.status,
+          purchased_at: ticket.purchased_at,
+          check_in_count: ticket.check_in_count,
+          last_checked_in_at: ticket.last_checked_in_at ?? undefined,
+          events: {
+            id: ticket.events.id,
+            name: ticket.events.name,
+            date: ticket.events.date,
+            event_type: ticket.events.event_type,
+            venue_name: ticket.events.venue_name ?? undefined,
+            venue_address: ticket.events.venue_address ?? undefined,
+          },
+        }),
+      );
 
     return transformedData;
   } catch (error) {
