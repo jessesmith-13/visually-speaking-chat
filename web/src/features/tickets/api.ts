@@ -152,7 +152,7 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
       id: string;
       user_id: string;
       event_id: string;
-      status: string;
+      status: "active" | "used" | "refunded" | "cancelled";
       purchased_at: string;
       check_in_count: number;
       last_checked_in_at: string | null;
