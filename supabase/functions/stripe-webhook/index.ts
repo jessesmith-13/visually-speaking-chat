@@ -8,70 +8,185 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, stripe-signature",
 };
 
+// Structured logging helper
+function log(
+  level: "INFO" | "WARN" | "ERROR",
+  message: string,
+  context?: Record<string, unknown>,
+) {
+  const timestamp = new Date().toISOString();
+  const logEntry = {
+    timestamp,
+    level,
+    message,
+    ...context,
+  };
+
+  if (level === "ERROR") {
+    console.error(JSON.stringify(logEntry, null, 2));
+  } else if (level === "WARN") {
+    console.warn(JSON.stringify(logEntry, null, 2));
+  } else {
+    console.log(JSON.stringify(logEntry, null, 2));
+  }
+}
+
 serve(async (req) => {
+  const startTime = Date.now();
+  let eventId = "unknown";
+  let eventType = "unknown";
+
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
+    log("INFO", "Webhook request received", {
+      method: req.method,
+      url: req.url,
+      headers: Object.fromEntries(req.headers.entries()),
+    });
+
     // Get Stripe configuration from environment
     const stripeSecretKey = Deno.env.get("STRIPE_SECRET_KEY");
     const stripeWebhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
 
     if (!stripeSecretKey) {
+      log(
+        "ERROR",
+        "STRIPE_SECRET_KEY is not configured in environment variables",
+      );
       throw new Error("STRIPE_SECRET_KEY is not configured");
     }
 
     if (!stripeWebhookSecret) {
+      log(
+        "ERROR",
+        "STRIPE_WEBHOOK_SECRET is not configured in environment variables",
+      );
       throw new Error("STRIPE_WEBHOOK_SECRET is not configured");
     }
 
     // Initialize Stripe
     const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: "2023-10-16",
+      apiVersion: "2025-11-17.clover",
       httpClient: Stripe.createFetchHttpClient(),
+    });
+
+    log("INFO", "Stripe client initialized", {
+      apiVersion: "2025-11-17.clover",
     });
 
     // Get the signature from headers
     const signature = req.headers.get("stripe-signature");
     if (!signature) {
+      log("ERROR", "Missing stripe-signature header in request");
       throw new Error("Missing stripe-signature header");
     }
 
     // Get the raw body
     const body = await req.text();
+    const bodyLength = body.length;
+
+    log("INFO", "Request body received", {
+      bodyLength,
+      signaturePresent: !!signature,
+    });
 
     // Verify webhook signature
     let event: Stripe.Event;
+    let usedExtendedTolerance = false;
     try {
       event = await stripe.webhooks.constructEventAsync(
         body,
         signature,
         stripeWebhookSecret,
+        300, // 5 minute tolerance (default)
       );
+      log("INFO", "Webhook signature verified with default tolerance");
     } catch (err) {
-      console.error("Webhook signature verification failed:", err);
-      throw new Error("Invalid signature");
+      // If signature fails with default tolerance, try with extended tolerance for retries
+      log(
+        "WARN",
+        "Webhook signature verification failed with default tolerance, trying extended tolerance for retries",
+        {
+          error: err instanceof Error ? err.message : String(err),
+          signatureHeader: signature,
+          bodyLength,
+        },
+      );
+
+      try {
+        event = await stripe.webhooks.constructEventAsync(
+          body,
+          signature,
+          stripeWebhookSecret,
+          86400, // 24 hour tolerance for retries
+        );
+        usedExtendedTolerance = true;
+        log(
+          "WARN",
+          "Webhook verified with extended tolerance - this is likely a delayed retry",
+          {
+            eventAge: event.created
+              ? `${Math.floor(Date.now() / 1000 - event.created)} seconds`
+              : "unknown",
+          },
+        );
+      } catch (retryErr) {
+        log(
+          "ERROR",
+          "Webhook signature verification failed with both default and extended tolerance",
+          {
+            defaultError: err instanceof Error ? err.message : String(err),
+            extendedError:
+              retryErr instanceof Error ? retryErr.message : String(retryErr),
+            signatureHeader: signature,
+            bodyLength,
+            webhookSecretPrefix: stripeWebhookSecret.substring(0, 10),
+          },
+        );
+        throw new Error("Invalid signature");
+      }
     }
 
-    console.log("Received webhook event:", event.type, event.id);
+    eventId = event.id;
+    eventType = event.type;
+
+    log("INFO", "Webhook event parsed successfully", {
+      eventId,
+      eventType,
+      eventCreated: new Date(event.created * 1000).toISOString(),
+      livemode: event.livemode,
+      usedExtendedTolerance,
+    });
 
     // Create Supabase admin client (service role)
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    log("INFO", "Supabase client initialized");
+
     // Handle different event types
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        console.log("Checkout session completed:", session.id);
+        log("INFO", "Processing checkout.session.completed", {
+          eventId,
+          sessionId: session.id,
+          metadata: session.metadata,
+        });
 
-        const { eventId, userId } = session.metadata || {};
+        const { eventId: metadataEventId, userId } = session.metadata || {};
 
-        if (!eventId || !userId) {
-          console.error("Missing metadata in checkout session:", session.id);
+        if (!metadataEventId || !userId) {
+          log("ERROR", "Missing required metadata in checkout session", {
+            eventId,
+            sessionId: session.id,
+            metadata: session.metadata,
+          });
           break;
         }
 
@@ -82,12 +197,21 @@ serve(async (req) => {
             : session.payment_intent?.id;
 
         if (!paymentIntentId) {
-          console.error(
-            "Missing payment intent in checkout session:",
-            session.id,
-          );
+          log("ERROR", "Missing payment intent in checkout session", {
+            eventId,
+            sessionId: session.id,
+          });
           break;
         }
+
+        log("INFO", "Creating ticket for checkout session", {
+          eventId,
+          sessionId: session.id,
+          paymentIntentId,
+          userId,
+          metadataEventId,
+          amount: (session.amount_total || 0) / 100,
+        });
 
         // Check if ticket already exists (idempotency)
         const { data: existingTicket } = await supabase
@@ -97,9 +221,14 @@ serve(async (req) => {
           .maybeSingle();
 
         if (existingTicket) {
-          console.log(
-            "Ticket already exists for payment intent:",
-            paymentIntentId,
+          log(
+            "WARN",
+            "Ticket already exists for payment intent (idempotent retry)",
+            {
+              eventId,
+              paymentIntentId,
+              ticketId: existingTicket.id,
+            },
           );
           break;
         }
@@ -109,7 +238,7 @@ serve(async (req) => {
           .from("tickets")
           .insert({
             user_id: userId,
-            event_id: eventId,
+            event_id: metadataEventId,
             payment_amount: (session.amount_total || 0) / 100, // Convert cents to dollars
             stripe_payment_intent_id: paymentIntentId,
             status: "active",
@@ -118,17 +247,28 @@ serve(async (req) => {
           .single();
 
         if (ticketError) {
-          console.error("Error creating ticket:", ticketError);
+          log("ERROR", "Failed to create ticket", {
+            eventId,
+            error: ticketError,
+            paymentIntentId,
+            userId,
+            metadataEventId,
+          });
           throw ticketError;
         }
 
-        console.log("Created ticket:", ticket.id);
+        log("INFO", "Ticket created successfully", {
+          eventId,
+          ticketId: ticket.id,
+          paymentIntentId,
+          userId,
+        });
 
         // Increment event attendees count
         const { data: eventData, error: fetchError } = await supabase
           .from("events")
           .select("attendees")
-          .eq("id", eventId)
+          .eq("id", metadataEventId)
           .single();
 
         if (!fetchError && eventData) {
@@ -136,30 +276,51 @@ serve(async (req) => {
           const { error: updateError } = await supabase
             .from("events")
             .update({ attendees: newCount })
-            .eq("id", eventId);
+            .eq("id", metadataEventId);
 
           if (updateError) {
-            console.error("Error updating attendees:", updateError);
+            log("ERROR", "Failed to update event attendees count", {
+              eventId,
+              metadataEventId,
+              error: updateError,
+            });
           } else {
-            console.log("Updated attendees count to:", newCount);
+            log("INFO", "Event attendees count updated", {
+              eventId,
+              metadataEventId,
+              newCount,
+            });
           }
+        } else if (fetchError) {
+          log("WARN", "Could not fetch event data for attendee count update", {
+            eventId,
+            metadataEventId,
+            error: fetchError,
+          });
         }
 
         // Record payment in stripe_payments table (optional)
         try {
           await supabase.from("stripe_payments").insert({
             user_id: userId,
-            event_id: eventId,
+            event_id: metadataEventId,
             stripe_payment_intent_id: paymentIntentId,
             amount: (session.amount_total || 0) / 100,
             currency: session.currency || "usd",
             status: "succeeded",
           });
-          console.log("Recorded payment in stripe_payments table");
+          log("INFO", "Payment recorded in stripe_payments table", {
+            eventId,
+            paymentIntentId,
+          });
         } catch (error) {
-          console.warn(
-            "Could not record payment (table may not exist):",
-            error,
+          log(
+            "WARN",
+            "Could not record payment in stripe_payments table (table may not exist)",
+            {
+              eventId,
+              error: error instanceof Error ? error.message : String(error),
+            },
           );
         }
 
@@ -168,15 +329,22 @@ serve(async (req) => {
 
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        console.log("Payment succeeded:", paymentIntent.id);
+        log("INFO", "Processing payment_intent.succeeded", {
+          eventId,
+          paymentIntentId: paymentIntent.id,
+          metadata: paymentIntent.metadata,
+          amount: paymentIntent.amount / 100,
+          currency: paymentIntent.currency,
+        });
 
-        const { eventId, userId } = paymentIntent.metadata;
+        const { eventId: metadataEventId, userId } = paymentIntent.metadata;
 
-        if (!eventId || !userId) {
-          console.error(
-            "Missing metadata in payment intent:",
-            paymentIntent.id,
-          );
+        if (!metadataEventId || !userId) {
+          log("ERROR", "Missing required metadata in payment intent", {
+            eventId,
+            paymentIntentId: paymentIntent.id,
+            metadata: paymentIntent.metadata,
+          });
           break;
         }
 
@@ -188,9 +356,14 @@ serve(async (req) => {
           .maybeSingle();
 
         if (existingTicket) {
-          console.log(
-            "Ticket already exists for payment intent:",
-            paymentIntent.id,
+          log(
+            "WARN",
+            "Ticket already exists for payment intent (idempotent retry)",
+            {
+              eventId,
+              paymentIntentId: paymentIntent.id,
+              ticketId: existingTicket.id,
+            },
           );
           break;
         }
@@ -200,7 +373,7 @@ serve(async (req) => {
           .from("tickets")
           .insert({
             user_id: userId,
-            event_id: eventId,
+            event_id: metadataEventId,
             payment_amount: paymentIntent.amount / 100, // Convert cents to dollars
             stripe_payment_intent_id: paymentIntent.id,
             status: "active",
@@ -209,17 +382,28 @@ serve(async (req) => {
           .single();
 
         if (ticketError) {
-          console.error("Error creating ticket:", ticketError);
+          log("ERROR", "Failed to create ticket", {
+            eventId,
+            error: ticketError,
+            paymentIntentId: paymentIntent.id,
+            userId,
+            metadataEventId,
+          });
           throw ticketError;
         }
 
-        console.log("Created ticket:", ticket.id);
+        log("INFO", "Ticket created successfully", {
+          eventId,
+          ticketId: ticket.id,
+          paymentIntentId: paymentIntent.id,
+          userId,
+        });
 
         // Increment event attendees count
         const { data: eventData, error: fetchError } = await supabase
           .from("events")
           .select("attendees")
-          .eq("id", eventId)
+          .eq("id", metadataEventId)
           .single();
 
         if (!fetchError && eventData) {
@@ -227,30 +411,51 @@ serve(async (req) => {
           const { error: updateError } = await supabase
             .from("events")
             .update({ attendees: newCount })
-            .eq("id", eventId);
+            .eq("id", metadataEventId);
 
           if (updateError) {
-            console.error("Error updating attendees:", updateError);
+            log("ERROR", "Failed to update event attendees count", {
+              eventId,
+              metadataEventId,
+              error: updateError,
+            });
           } else {
-            console.log("Updated attendees count to:", newCount);
+            log("INFO", "Event attendees count updated", {
+              eventId,
+              metadataEventId,
+              newCount,
+            });
           }
+        } else if (fetchError) {
+          log("WARN", "Could not fetch event data for attendee count update", {
+            eventId,
+            metadataEventId,
+            error: fetchError,
+          });
         }
 
         // Record payment in stripe_payments table (optional)
         try {
           await supabase.from("stripe_payments").insert({
             user_id: userId,
-            event_id: eventId,
+            event_id: metadataEventId,
             stripe_payment_intent_id: paymentIntent.id,
             amount: paymentIntent.amount / 100,
             currency: paymentIntent.currency,
             status: "succeeded",
           });
-          console.log("Recorded payment in stripe_payments table");
+          log("INFO", "Payment recorded in stripe_payments table", {
+            eventId,
+            paymentIntentId: paymentIntent.id,
+          });
         } catch (error) {
-          console.warn(
-            "Could not record payment (table may not exist):",
-            error,
+          log(
+            "WARN",
+            "Could not record payment in stripe_payments table (table may not exist)",
+            {
+              eventId,
+              error: error instanceof Error ? error.message : String(error),
+            },
           );
         }
 
@@ -259,23 +464,37 @@ serve(async (req) => {
 
       case "payment_intent.payment_failed": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        console.log("Payment failed:", paymentIntent.id);
+        log("ERROR", "Payment failed", {
+          eventId,
+          paymentIntentId: paymentIntent.id,
+          metadata: paymentIntent.metadata,
+          amount: paymentIntent.amount / 100,
+          currency: paymentIntent.currency,
+          lastPaymentError: paymentIntent.last_payment_error,
+        });
 
         // Optionally record failed payment
         try {
-          const { eventId, userId } = paymentIntent.metadata;
-          if (eventId && userId) {
+          const { eventId: metadataEventId, userId } = paymentIntent.metadata;
+          if (metadataEventId && userId) {
             await supabase.from("stripe_payments").insert({
               user_id: userId,
-              event_id: eventId,
+              event_id: metadataEventId,
               stripe_payment_intent_id: paymentIntent.id,
               amount: paymentIntent.amount / 100,
               currency: paymentIntent.currency,
               status: "failed",
             });
+            log("INFO", "Failed payment recorded in stripe_payments table", {
+              eventId,
+              paymentIntentId: paymentIntent.id,
+            });
           }
         } catch (error) {
-          console.warn("Could not record failed payment:", error);
+          log("WARN", "Could not record failed payment", {
+            eventId,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
 
         break;
@@ -283,7 +502,13 @@ serve(async (req) => {
 
       case "charge.refunded": {
         const charge = event.data.object as Stripe.Charge;
-        console.log("Charge refunded:", charge.id);
+        log("INFO", "Processing charge.refunded", {
+          eventId,
+          chargeId: charge.id,
+          amount: charge.amount / 100,
+          amountRefunded: charge.amount_refunded / 100,
+          paymentIntent: charge.payment_intent,
+        });
 
         if (charge.payment_intent) {
           const paymentIntentId =
@@ -298,12 +523,16 @@ serve(async (req) => {
             .eq("stripe_payment_intent_id", paymentIntentId);
 
           if (updateError) {
-            console.error("Error marking ticket as refunded:", updateError);
-          } else {
-            console.log(
-              "Marked ticket as refunded for payment intent:",
+            log("ERROR", "Failed to mark ticket as refunded", {
+              eventId,
               paymentIntentId,
-            );
+              error: updateError,
+            });
+          } else {
+            log("INFO", "Ticket marked as refunded", {
+              eventId,
+              paymentIntentId,
+            });
           }
         }
 
@@ -311,15 +540,42 @@ serve(async (req) => {
       }
 
       default:
-        console.log("Unhandled event type:", event.type);
+        log("WARN", "Unhandled event type received", {
+          eventId,
+          eventType: event.type,
+        });
     }
+
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+
+    log("INFO", "Webhook processed successfully", {
+      eventId,
+      eventType,
+      durationMs: duration,
+    });
 
     return new Response(JSON.stringify({ received: true }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
   } catch (error) {
-    console.error("Webhook error:", error);
+    const endTime = Date.now();
+    const duration = endTime - startTime;
+
+    log("ERROR", "Webhook processing failed", {
+      eventId,
+      eventType,
+      durationMs: duration,
+      error:
+        error instanceof Error
+          ? {
+              message: error.message,
+              name: error.name,
+              stack: error.stack,
+            }
+          : String(error),
+    });
 
     return new Response(
       JSON.stringify({

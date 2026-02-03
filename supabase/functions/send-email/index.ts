@@ -134,7 +134,7 @@ Deno.serve(async (req) => {
                 </div>
                 <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
                 <p style="color: #6b7280; font-size: 14px;">
-                  This email was sent from Visually Speaking - Video Chat for the Deaf & Hard of Hearing Community
+                  This email was sent from Visually Speaking - Video Chat for the ASL Community
                 </p>
               </div>
             `,

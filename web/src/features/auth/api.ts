@@ -1,55 +1,66 @@
-import { supabase } from '@/lib/supabase/client';
+import { supabase } from "@/lib/supabase/client";
 
 export async function signIn(credentials: { email: string; password: string }) {
   return await supabase.auth.signInWithPassword(credentials);
 }
 
-export async function signUp(credentials: { 
-  email: string; 
+export async function signUp(credentials: {
+  email: string;
   password: string;
   options?: {
     data?: Record<string, unknown>;
     emailRedirectTo?: string;
-  }
+  };
 }) {
   return await supabase.auth.signUp(credentials);
 }
 
-export async function signInWithGoogle(options: { 
-  provider: 'google';
+export async function signInWithGoogle(options: {
+  provider: "google";
   options?: {
     redirectTo?: string;
-  }
+  };
 }) {
   return await supabase.auth.signInWithOAuth(options);
 }
 
 export async function signOut() {
-  // We still call the standard signOut() for good measure (clears internal state/cookies)
+  // Call Supabase sign out (this is the authoritative logout)
   const { error } = await supabase.auth.signOut();
+
   if (error) {
     console.error("Supabase signOut error:", error.message);
-    // Continue with clearing local storage even if this fails
   }
-  
-  // 👇 USE THIS DIRECT METHOD AS THE ONLY RELIABLE WAY IN YOUR ENVIRONMENT
+
+  // Optional safety cleanup: remove any Supabase auth tokens (all envs)
   try {
-    const storageKey = 'sb-btyneapnbsbgpopcfnzy-auth-token';
-    localStorage.removeItem(storageKey);
-    console.log("Forced logout: Manually cleared session key via localStorage API");
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith("sb-") && key.endsWith("-auth-token"))
+      .forEach((key) => localStorage.removeItem(key));
+
+    console.log("Forced logout: Cleared all Supabase auth tokens");
   } catch (storageError) {
-    console.error("Logout Error: Failed to manually clear storage:", storageError);
+    console.error(
+      "Logout Error: Failed to clear Supabase auth tokens:",
+      storageError,
+    );
   }
 }
 
 export async function getSession() {
-  const { data: { session }, error } = await supabase.auth.getSession();
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
   if (error) throw error;
   return session;
 }
 
 export async function getUser() {
-  const { data: { user }, error } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser();
   if (error) throw error;
   return user;
 }
