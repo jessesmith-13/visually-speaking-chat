@@ -29,7 +29,16 @@ export function CheckIn() {
   // DEBUG MODE
   const [debugQrUrl, setDebugQrUrl] = useState("");
   const [debugResult, setDebugResult] = useState<string>("");
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const isDev = import.meta.env.DEV;
+
+  const addDebugLog = (log: string) => {
+    console.log(log);
+    setDebugLogs((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] ${log}`,
+    ]);
+  };
 
   const testQrExtraction = () => {
     const match = debugQrUrl.match(/\/admin\/check-in\/([a-fA-F0-9-]+)/);
@@ -169,24 +178,25 @@ export function CheckIn() {
           await stopScanner();
 
           // DEBUG: Log what we scanned
-          console.log("🔍 QR Code Scanned:", decodedText);
+          addDebugLog(`🔍 QR SCANNED: ${decodedText}`);
 
           // Extract ticket ID from URL (handle both full URLs and paths)
           // Use [a-fA-F0-9] to match UUIDs with uppercase/lowercase hex digits
           const ticketIdMatch = decodedText.match(
             /\/admin\/check-in\/([a-fA-F0-9-]+)/,
           );
-          console.log("🎯 Ticket ID Match:", ticketIdMatch);
+          addDebugLog(
+            `🎯 REGEX MATCH: ${ticketIdMatch ? ticketIdMatch[1] : "NO MATCH"}`,
+          );
 
           if (ticketIdMatch) {
-            console.log("✅ Navigating to ticket:", ticketIdMatch[1]);
+            addDebugLog(
+              `✅ NAVIGATING TO: /admin/check-in/${ticketIdMatch[1]}`,
+            );
             // Navigate to the ticket URL so the useEffect handles verification
             navigate(`/admin/check-in/${ticketIdMatch[1]}`);
           } else {
-            console.error(
-              "❌ QR pattern didn't match. Full text:",
-              decodedText,
-            );
+            addDebugLog(`❌ PATTERN FAILED. Full text: ${decodedText}`);
             setErrorMessage(
               `Invalid QR code format. Got: ${decodedText.substring(0, 50)}...`,
             );
@@ -450,6 +460,23 @@ export function CheckIn() {
                   <p className="font-mono text-sm whitespace-pre-wrap">
                     {debugResult}
                   </p>
+                </div>
+              )}
+              {debugLogs.length > 0 && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-bold text-yellow-900 dark:text-yellow-100">
+                    Debug Logs:
+                  </h4>
+                  <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded-lg max-h-40 overflow-y-auto">
+                    {debugLogs.map((log, index) => (
+                      <p
+                        key={index}
+                        className="text-sm text-gray-900 dark:text-gray-100"
+                      >
+                        {log}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
