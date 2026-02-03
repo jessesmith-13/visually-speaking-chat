@@ -55,6 +55,7 @@ const mockUpcomingTicket: TicketWithEvent = {
     id: "event-1",
     name: "Upcoming Virtual Event",
     date: upcomingEventDate.toISOString(),
+    duration: 60, // 60 minutes
     event_type: "virtual",
     venue_name: null,
     venue_address: null,
@@ -73,6 +74,7 @@ const mockPastTicket: TicketWithEvent = {
     id: "event-2",
     name: "Past In-Person Event",
     date: pastEventDate.toISOString(),
+    duration: 60, // 60 minutes
     event_type: "in-person",
     venue_name: "Test Venue",
     venue_address: "123 Test St",
@@ -91,6 +93,7 @@ const mockInPersonTicket: TicketWithEvent = {
     id: "event-3",
     name: "Upcoming In-Person Event",
     date: upcomingEventDate.toISOString(),
+    duration: 90, // 90 minutes
     event_type: "in-person",
     venue_name: "Downtown Convention Center",
     venue_address: "456 Main St, City, State 12345",
@@ -365,7 +368,6 @@ describe("MyTicketsRoute", () => {
       renderWithRouter(<MyTicketsRoute />);
 
       await waitFor(() => {
-        // Past ticket should show on Past tab, so switch to it
         const pastButtons = screen.getAllByRole("button", { name: /past/i });
         expect(pastButtons.length).toBeGreaterThan(0);
       });
@@ -374,7 +376,9 @@ describe("MyTicketsRoute", () => {
       await user.click(pastButtons[0]);
 
       await waitFor(() => {
-        expect(screen.getByText("Past Event")).toBeInTheDocument();
+        // Past events don't get a special "Past Event" badge - they just show In-Person or Virtual
+        expect(screen.getByText("Past In-Person Event")).toBeInTheDocument();
+        expect(screen.getByText("In-Person")).toBeInTheDocument();
       });
     });
 
@@ -412,7 +416,8 @@ describe("MyTicketsRoute", () => {
       await user.click(pastButtons[0]);
 
       await waitFor(() => {
-        expect(screen.getByText("Checked In")).toBeInTheDocument();
+        // The actual text is "Checked in 1 time" not "Checked In"
+        expect(screen.getByText(/Checked in 1 time/i)).toBeInTheDocument();
       });
     });
 

@@ -10,8 +10,8 @@ import {
   Ticket as TicketIcon,
   Calendar,
   MapPin,
-  CheckCircle2,
   Download,
+  CheckCircle2,
 } from "lucide-react";
 import {
   getMyTicketsWithDetails,
@@ -84,12 +84,24 @@ export function MyTicketsRoute() {
 
   // Filter tickets based on active tab
   const now = new Date();
-  const upcomingTickets = tickets.filter(
-    (ticket) => new Date(ticket.events.date) >= now,
-  );
-  const pastTickets = tickets.filter(
-    (ticket) => new Date(ticket.events.date) < now,
-  );
+
+  // An event is "past" only if it has completely ended (start time + duration)
+  const upcomingTickets = tickets.filter((ticket) => {
+    const eventStart = new Date(ticket.events.date);
+    const eventEnd = new Date(
+      eventStart.getTime() + ticket.events.duration * 60000,
+    ); // duration is in minutes
+    return eventEnd >= now; // Include events that haven't ended yet
+  });
+
+  const pastTickets = tickets.filter((ticket) => {
+    const eventStart = new Date(ticket.events.date);
+    const eventEnd = new Date(
+      eventStart.getTime() + ticket.events.duration * 60000,
+    );
+    return eventEnd < now; // Only events that have completely ended
+  });
+
   const displayedTickets =
     activeTab === "upcoming" ? upcomingTickets : pastTickets;
 
@@ -192,11 +204,14 @@ export function MyTicketsRoute() {
           <div className="space-y-6">
             {displayedTickets.map((ticket) => {
               const event = ticket.events;
-              const eventDate = new Date(event.date);
-              const isPast = eventDate < new Date();
               const isInPerson = event.event_type === "in-person";
-              const isCheckedIn =
-                isInPerson && (ticket.check_in_count ?? 0) > 0;
+
+              // Check if event is currently live
+              const eventStart = new Date(event.date);
+              const eventEnd = new Date(
+                eventStart.getTime() + event.duration * 60000,
+              );
+              const isLive = now >= eventStart && now < eventEnd;
 
               return (
                 <Card key={ticket.id} className="overflow-hidden">
@@ -207,18 +222,14 @@ export function MyTicketsRoute() {
                           {event.name}
                         </CardTitle>
                         <div className="flex flex-wrap gap-2">
-                          <Badge variant={isPast ? "secondary" : "default"}>
-                            {isPast ? "Past Event" : "Upcoming"}
-                          </Badge>
+                          {isLive && (
+                            <Badge className="bg-red-500 hover:bg-red-600 text-white animate-pulse">
+                              🔴 LIVE NOW
+                            </Badge>
+                          )}
                           <Badge variant="outline">
                             {isInPerson ? "In-Person" : "Virtual"}
                           </Badge>
-                          {isCheckedIn && (
-                            <Badge className="bg-green-600 dark:bg-green-700">
-                              <CheckCircle2 className="size-3 mr-1" />
-                              Checked In
-                            </Badge>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -232,10 +243,10 @@ export function MyTicketsRoute() {
                           <Calendar className="size-5 text-gray-500 mt-0.5" />
                           <div>
                             <p className="font-medium">
-                              {format(eventDate, "EEEE, MMMM d, yyyy")}
+                              {format(eventStart, "EEEE, MMMM d, yyyy")}
                             </p>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
-                              {format(eventDate, "h:mm a")}
+                              {format(eventStart, "h:mm a")}
                             </p>
                           </div>
                         </div>
@@ -254,21 +265,28 @@ export function MyTicketsRoute() {
                           </div>
                         )}
 
-                        {isCheckedIn && ticket.last_checked_in_at && (
-                          <div className="mt-4 p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-                            <p className="text-sm text-green-700 dark:text-green-300">
-                              ✓ Checked in at{" "}
+                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+                          {/* Check-in Status */}
+                          {isInPerson &&
+                            ticket.check_in_count !== undefined &&
+                            ticket.check_in_count > 0 && (
+                              <div className="mb-3 flex items-center gap-2 text-green-600 dark:text-green-400">
+                                <CheckCircle2 className="size-4" />
+                                <span className="text-sm font-medium">
+                                  Checked in {ticket.check_in_count} time
+                                  {ticket.check_in_count !== 1 ? "s" : ""}
+                                </span>
+                              </div>
+                            )}
+                          {isInPerson && ticket.last_checked_in_at && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                              Last check-in:{" "}
                               {format(
                                 new Date(ticket.last_checked_in_at),
-                                "h:mm a 'on' MMM d",
+                                "MMM d, yyyy 'at' h:mm a",
                               )}
-                              {(ticket.check_in_count ?? 0) > 1 &&
-                                ` (${ticket.check_in_count} times)`}
                             </p>
-                          </div>
-                        )}
-
-                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+                          )}
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             Ticket ID: {ticket.id}
                           </p>
@@ -283,62 +301,31 @@ export function MyTicketsRoute() {
                       </div>
 
                       {/* QR Code */}
-                      {isInPerson &&
-                        qrCodes[ticket.id] &&
-                        (() => {
-                          const baseUrl = window.location.origin;
-                          const checkInUrl = `${baseUrl}/admin/check-in/${ticket.id}`;
-                          const isDev = import.meta.env.DEV;
-
-                          return (
-                            <div className="flex flex-col items-center">
-                              <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-                                <img
-                                  src={qrCodes[ticket.id]}
-                                  alt={`QR code for ${event.name}`}
-                                  className="w-48 h-48"
-                                />
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() =>
-                                  downloadQRCode(ticket.id, event.name)
-                                }
-                                className="mt-3"
-                              >
-                                <Download className="size-4 mr-2" />
-                                Download QR
-                              </Button>
-                              {isDev && (
-                                <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-300 dark:border-yellow-700 rounded text-xs max-w-[250px]">
-                                  <p className="font-bold text-yellow-900 dark:text-yellow-100 mb-1">
-                                    🔧 DEV: QR URL
-                                  </p>
-                                  <p className="font-mono text-yellow-800 dark:text-yellow-200 break-all">
-                                    {checkInUrl}
-                                  </p>
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => {
-                                      navigator.clipboard.writeText(checkInUrl);
-                                      alert(
-                                        "URL copied! Paste it in /admin/check-in debug box",
-                                      );
-                                    }}
-                                    className="mt-2 w-full text-xs h-7"
-                                  >
-                                    Copy URL
-                                  </Button>
-                                </div>
-                              )}
-                              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2 max-w-[200px]">
-                                Show this QR code at the venue for check-in
-                              </p>
-                            </div>
-                          );
-                        })()}
+                      {isInPerson && qrCodes[ticket.id] && (
+                        <div className="flex flex-col items-center">
+                          <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+                            <img
+                              src={qrCodes[ticket.id]}
+                              alt={`QR code for ${event.name}`}
+                              className="w-48 h-48"
+                            />
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              downloadQRCode(ticket.id, event.name)
+                            }
+                            className="mt-3"
+                          >
+                            <Download className="size-4 mr-2" />
+                            Download QR
+                          </Button>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2 max-w-[200px]">
+                            Show this QR code at the venue for check-in
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     {/* Action Buttons */}

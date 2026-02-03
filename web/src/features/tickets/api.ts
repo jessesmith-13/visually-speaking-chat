@@ -94,6 +94,7 @@ export interface TicketWithEvent extends Ticket {
     id: string;
     name: string;
     date: string;
+    duration: number;
     event_type: "virtual" | "in-person";
     venue_name?: string;
     venue_address?: string;
@@ -127,6 +128,7 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
           id,
           name,
           date,
+          duration,
           event_type,
           venue_name,
           venue_address,
@@ -160,6 +162,7 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
         id: string;
         name: string;
         date: string;
+        duration: number;
         event_type: "virtual" | "in-person";
         venue_name: string | null;
         venue_address: string | null;
@@ -184,6 +187,7 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
             id: ticket.events.id,
             name: ticket.events.name,
             date: ticket.events.date,
+            duration: ticket.events.duration,
             event_type: ticket.events.event_type,
             venue_name: ticket.events.venue_name ?? undefined,
             venue_address: ticket.events.venue_address ?? undefined,
