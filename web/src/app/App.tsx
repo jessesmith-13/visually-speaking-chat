@@ -24,6 +24,7 @@ import { AdminUsersRoute } from "@/routes/admin/AdminUsers.route";
 import { AdminEmailRoute } from "@/routes/admin/AdminEmail.route";
 import { PromoCodesRoute } from "@/routes/admin/PromoCodes.route";
 import { CheckIn } from "@/routes/admin/CheckIn.route";
+import { MyTicketsRoute } from "@/routes/tickets/MyTickets.route";
 import { NotFoundRoute } from "@/routes/not-found/NotFound.route";
 
 // Validate environment variables on app startup
@@ -85,6 +86,7 @@ function AppContent() {
           <Route path="/auth" element={<AuthRoute />} />
           <Route path="/events" element={<EventsRoute />} />
           <Route path="/events/:eventId" element={<EventDetailRoute />} />
+          <Route path="/tickets" element={<MyTicketsRoute />} />
           <Route path="/room/:roomId" element={<VideoRoomRoute />} />
           <Route path="/create-event" element={<CreateEventRoute />} />
           <Route path="/admin/users" element={<AdminUsersRoute />} />

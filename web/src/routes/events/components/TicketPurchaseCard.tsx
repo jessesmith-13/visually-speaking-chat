@@ -156,9 +156,13 @@ export function TicketPurchaseCard({
                 <Button
                   className="w-full"
                   onClick={onJoinEvent}
-                  disabled={isEventPast}
+                  disabled={isEventPast || event.eventType === "in-person"}
                 >
-                  {isEventLive ? "Join Now" : "Join Event"}
+                  {event.eventType === "in-person"
+                    ? "In-Person Event - Check In At Venue"
+                    : isEventLive
+                      ? "Join Now"
+                      : "Join Event"}
                 </Button>
               </>
             )}

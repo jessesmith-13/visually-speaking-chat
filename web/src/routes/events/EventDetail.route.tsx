@@ -425,6 +425,7 @@ export function EventDetailRoute() {
               <AdminParticipantsList
                 participants={participants}
                 loading={loadingParticipants}
+                eventType={currentEvent.eventType}
               />
             )}
           </div>

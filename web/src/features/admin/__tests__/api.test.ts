@@ -259,7 +259,7 @@ describe("Admin API", () => {
 
   describe("getTicketDetails", () => {
     it("should fetch ticket details successfully", async () => {
-      const mockTicketData = {
+      const mockTicket = {
         id: "ticket-123",
         event_id: "event-456",
         user_id: "user-789",
@@ -276,90 +276,87 @@ describe("Admin API", () => {
         },
       };
 
-      const mockSelect = vi.fn().mockReturnThis();
-      const mockEq = vi.fn().mockReturnThis();
-      const mockSingle = vi.fn().mockResolvedValue({
-        data: mockTicketData,
-        error: null,
-      });
-
-      vi.mocked(supabase.from).mockReturnValue({
-        select: mockSelect,
-        eq: mockEq,
-        single: mockSingle,
-      } as never);
-
-      mockSelect.mockReturnValue({
-        eq: mockEq,
-        single: mockSingle,
-      } as never);
-
-      mockEq.mockReturnValue({
-        single: mockSingle,
-      } as never);
+      vi.mocked(callEdgeFunction).mockResolvedValue({ ticket: mockTicket });
 
       const result = await api.getTicketDetails("ticket-123");
 
-      expect(supabase.from).toHaveBeenCalledWith("tickets");
-      expect(mockSelect).toHaveBeenCalled();
-      expect(mockEq).toHaveBeenCalledWith("id", "ticket-123");
-      expect(mockSingle).toHaveBeenCalled();
-      expect(result).toEqual(mockTicketData);
+      expect(callEdgeFunction).toHaveBeenCalledWith(
+        "admin-operations",
+        "/tickets/ticket-123",
+        { method: "GET" },
+      );
+      expect(result).toEqual(mockTicket);
+    });
+
+    it("should handle null last_checked_in_at", async () => {
+      const mockTicket = {
+        id: "ticket-456",
+        event_id: "event-789",
+        user_id: "user-123",
+        check_in_count: 0,
+        last_checked_in_at: null,
+        events: {
+          name: "Another Event",
+          date: "2026-03-01T18:00:00.000Z",
+          event_type: "virtual",
+        },
+        profiles: {
+          full_name: "Jane Smith",
+          email: "jane@example.com",
+        },
+      };
+
+      vi.mocked(callEdgeFunction).mockResolvedValue({ ticket: mockTicket });
+
+      const result = await api.getTicketDetails("ticket-456");
+
+      expect(result.last_checked_in_at).toBeNull();
+      expect(result).toEqual(mockTicket);
+    });
+
+    it("should handle empty arrays gracefully (shouldn't happen but defensive)", async () => {
+      const mockTicket = {
+        id: "ticket-789",
+        event_id: "event-123",
+        user_id: "user-456",
+        check_in_count: 0,
+        last_checked_in_at: null,
+        events: {
+          name: "Event Name",
+          date: "2026-04-01T18:00:00.000Z",
+          event_type: "virtual",
+        },
+        profiles: {
+          full_name: "Test User",
+          email: "test@example.com",
+        },
+      };
+
+      vi.mocked(callEdgeFunction).mockResolvedValue({ ticket: mockTicket });
+
+      const result = await api.getTicketDetails("ticket-789");
+
+      expect(result.events).toHaveProperty("name");
+      expect(result.profiles).toHaveProperty("full_name");
     });
 
     it("should throw error when ticket not found", async () => {
-      const mockSelect = vi.fn().mockReturnThis();
-      const mockEq = vi.fn().mockReturnThis();
-      const mockSingle = vi.fn().mockResolvedValue({
-        data: null,
-        error: { message: "Ticket not found" },
-      });
+      vi.mocked(callEdgeFunction).mockRejectedValue(
+        new Error("Ticket not found"),
+      );
 
-      vi.mocked(supabase.from).mockReturnValue({
-        select: mockSelect,
-        eq: mockEq,
-        single: mockSingle,
-      } as never);
-
-      mockSelect.mockReturnValue({
-        eq: mockEq,
-        single: mockSingle,
-      } as never);
-
-      mockEq.mockReturnValue({
-        single: mockSingle,
-      } as never);
-
-      await expect(api.getTicketDetails("invalid-ticket")).rejects.toThrow(
+      await expect(api.getTicketDetails("nonexistent")).rejects.toThrow(
         "Ticket not found",
       );
     });
 
     it("should throw generic error when data is null without error", async () => {
-      const mockSelect = vi.fn().mockReturnThis();
-      const mockEq = vi.fn().mockReturnThis();
-      const mockSingle = vi.fn().mockResolvedValue({
-        data: null,
-        error: null,
-      });
-
-      vi.mocked(supabase.from).mockReturnValue({
-        select: mockSelect,
-        eq: mockEq,
-        single: mockSingle,
-      } as never);
-
-      mockSelect.mockReturnValue({
-        eq: mockEq,
-        single: mockSingle,
-      } as never);
-
-      mockEq.mockReturnValue({
-        single: mockSingle,
-      } as never);
+      vi.mocked(callEdgeFunction).mockRejectedValue(
+        new Error("Failed to fetch ticket"),
+      );
 
       await expect(api.getTicketDetails("ticket-123")).rejects.toThrow(
-        "Ticket not found",
+        "Failed to fetch ticket",
       );
     });
   });
@@ -412,7 +409,7 @@ describe("Admin API", () => {
       });
 
       await expect(api.verifyAndCheckInTicket("ticket-123")).rejects.toThrow(
-        "Failed to verify ticket",
+        "No response from ticket verification",
       );
     });
 
