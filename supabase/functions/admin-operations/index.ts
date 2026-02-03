@@ -17,6 +17,7 @@
  *   PUT /promo-codes/:promoCodeId - Update promo code
  *   DELETE /promo-codes/:promoCodeId - Delete promo code
  *   POST /comp-ticket - Issue comp ticket
+ *   GET /tickets/:ticketId - Get ticket details (admin only)
  *
  * Security: Requires admin authentication (except GET event updates)
  */
@@ -806,6 +807,69 @@ Deno.serve(async (req) => {
 
           console.log("✅ Comp ticket issued:", newTicket.id);
           return json({ ticket: newTicket }, 201, corsHeaders);
+        },
+      },
+
+      // GET /tickets/:ticketId - Get ticket details (admin only)
+      {
+        pattern: /^\/tickets\/([a-f0-9-]+)$/,
+        method: "GET",
+        handler: async (_req, _userId, match, supabaseAdmin, corsHeaders) => {
+          const ticketId = match[1];
+          const uuidCheck = validateUuid(ticketId);
+          if (!uuidCheck.valid) {
+            return badRequest("Invalid ticket ID", corsHeaders);
+          }
+
+          console.log(`🎫 Fetching ticket details: ${ticketId}`);
+
+          const { data, error } = await supabaseAdmin
+            .from("tickets")
+            .select(
+              `
+              id,
+              event_id,
+              user_id,
+              check_in_count,
+              last_checked_in_at,
+              events (
+                name,
+                date,
+                event_type
+              ),
+              profiles:user_id (
+                full_name,
+                email
+              )
+            `,
+            )
+            .eq("id", ticketId)
+            .maybeSingle();
+
+          if (error) {
+            console.error("❌ Error fetching ticket:", error);
+            return serverError(error, corsHeaders);
+          }
+
+          if (!data) {
+            return notFound("Ticket not found", corsHeaders);
+          }
+
+          // Transform array results to single objects
+          const ticket = {
+            id: data.id,
+            event_id: data.event_id,
+            user_id: data.user_id,
+            check_in_count: data.check_in_count,
+            last_checked_in_at: data.last_checked_in_at,
+            events: Array.isArray(data.events) ? data.events[0] : data.events,
+            profiles: Array.isArray(data.profiles)
+              ? data.profiles[0]
+              : data.profiles,
+          };
+
+          console.log("✅ Ticket details fetched");
+          return json({ ticket }, 200, corsHeaders);
         },
       },
     ];
