@@ -267,15 +267,17 @@ export function MyTicketsRoute() {
 
                         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
                           {/* Check-in Status */}
-                          {isInPerson && ticket.check_in_count > 0 && (
-                            <div className="mb-3 flex items-center gap-2 text-green-600 dark:text-green-400">
-                              <CheckCircle2 className="size-4" />
-                              <span className="text-sm font-medium">
-                                Checked in {ticket.check_in_count} time
-                                {ticket.check_in_count !== 1 ? "s" : ""}
-                              </span>
-                            </div>
-                          )}
+                          {isInPerson &&
+                            ticket.check_in_count !== undefined &&
+                            ticket.check_in_count > 0 && (
+                              <div className="mb-3 flex items-center gap-2 text-green-600 dark:text-green-400">
+                                <CheckCircle2 className="size-4" />
+                                <span className="text-sm font-medium">
+                                  Checked in {ticket.check_in_count} time
+                                  {ticket.check_in_count !== 1 ? "s" : ""}
+                                </span>
+                              </div>
+                            )}
                           {isInPerson && ticket.last_checked_in_at && (
                             <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                               Last check-in:{" "}
