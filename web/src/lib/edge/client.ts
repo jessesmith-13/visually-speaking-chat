@@ -30,6 +30,8 @@ interface EventParticipant {
   user_name: string;
   ticket_id: string;
   purchased_at: string;
+  check_in_count: number;
+  last_checked_in_at: string | null;
   profiles: {
     full_name: string;
     email: string;
