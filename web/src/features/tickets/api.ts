@@ -145,7 +145,15 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
     }
 
     console.log("✅ Tickets with details loaded:", data?.length || 0);
-    return data as TicketWithEvent[];
+
+    // Transform the data to match our TicketWithEvent type
+    // Supabase returns events as an array, but we need a single object
+    const transformedData = (data || []).map((ticket) => ({
+      ...ticket,
+      events: Array.isArray(ticket.events) ? ticket.events[0] : ticket.events,
+    })) as TicketWithEvent[];
+
+    return transformedData;
   } catch (error) {
     console.error("Error fetching tickets with details:", error);
     return [];
