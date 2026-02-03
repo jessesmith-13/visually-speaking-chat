@@ -177,7 +177,14 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
       purchased_at: ticket.purchased_at,
       check_in_count: ticket.check_in_count,
       last_checked_in_at: ticket.last_checked_in_at,
-      events: ticket.events[0],
+      events: {
+        id: ticket.events[0].id,
+        name: ticket.events[0].name,
+        date: ticket.events[0].date,
+        event_type: ticket.events[0].event_type,
+        venue_name: ticket.events[0].venue_name ?? undefined,
+        venue_address: ticket.events[0].venue_address ?? undefined,
+      },
     }));
 
     return transformedData;
