@@ -26,29 +26,6 @@ export function CheckIn() {
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
 
-  // DEBUG MODE
-  const [debugQrUrl, setDebugQrUrl] = useState("");
-  const [debugResult, setDebugResult] = useState<string>("");
-  const [debugLogs, setDebugLogs] = useState<string[]>([]);
-  const isDev = import.meta.env.DEV;
-
-  const addDebugLog = (log: string) => {
-    console.log(log);
-    setDebugLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] ${log}`,
-    ]);
-  };
-
-  const testQrExtraction = () => {
-    const match = debugQrUrl.match(/\/admin\/check-in\/([a-fA-F0-9-]+)/);
-    if (match) {
-      setDebugResult(`✅ MATCH! Extracted ID: ${match[1]}`);
-    } else {
-      setDebugResult(`❌ NO MATCH! URL doesn't match pattern`);
-    }
-  };
-
   // Function declarations BEFORE useEffect hooks
   const stopScanner = async () => {
     if (html5QrCodeRef.current) {
@@ -177,26 +154,16 @@ export function CheckIn() {
           // Stop scanner immediately
           await stopScanner();
 
-          // DEBUG: Log what we scanned
-          addDebugLog(`🔍 QR SCANNED: ${decodedText}`);
-
           // Extract ticket ID from URL (handle both full URLs and paths)
           // Use [a-fA-F0-9] to match UUIDs with uppercase/lowercase hex digits
           const ticketIdMatch = decodedText.match(
             /\/admin\/check-in\/([a-fA-F0-9-]+)/,
           );
-          addDebugLog(
-            `🎯 REGEX MATCH: ${ticketIdMatch ? ticketIdMatch[1] : "NO MATCH"}`,
-          );
 
           if (ticketIdMatch) {
-            addDebugLog(
-              `✅ NAVIGATING TO: /admin/check-in/${ticketIdMatch[1]}`,
-            );
             // Navigate to the ticket URL so the useEffect handles verification
             navigate(`/admin/check-in/${ticketIdMatch[1]}`);
           } else {
-            addDebugLog(`❌ PATTERN FAILED. Full text: ${decodedText}`);
             setErrorMessage(
               `Invalid QR code format. Got: ${decodedText.substring(0, 50)}...`,
             );
@@ -427,61 +394,6 @@ export function CheckIn() {
             Attendees should present their QR code from their email
           </p>
         </div>
-
-        {/* DEBUG MODE */}
-        {isDev && (
-          <Card className="mt-6 p-6 bg-yellow-50 dark:bg-yellow-950/20 border-yellow-300 dark:border-yellow-700">
-            <h3 className="text-xl font-bold mb-4 text-yellow-900 dark:text-yellow-100">
-              🔧 DEBUG MODE (DEV ONLY)
-            </h3>
-            <p className="mb-4 text-sm text-yellow-800 dark:text-yellow-200">
-              Paste the QR code URL from your email to test if it extracts
-              correctly
-            </p>
-            <div className="space-y-3">
-              <input
-                type="text"
-                placeholder="Paste full QR URL (e.g., https://yourapp.com/admin/check-in/abc-123)"
-                value={debugQrUrl}
-                onChange={(e) => setDebugQrUrl(e.target.value)}
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-yellow-500 dark:bg-gray-700 dark:border-gray-600"
-              />
-              <Button
-                onClick={testQrExtraction}
-                disabled={!debugQrUrl}
-                className="w-full bg-yellow-600 hover:bg-yellow-700"
-              >
-                Test URL Extraction
-              </Button>
-              {debugResult && (
-                <div
-                  className={`p-4 rounded-lg ${debugResult.startsWith("✅") ? "bg-green-100 dark:bg-green-950/30 text-green-900 dark:text-green-100" : "bg-red-100 dark:bg-red-950/30 text-red-900 dark:text-red-100"}`}
-                >
-                  <p className="font-mono text-sm whitespace-pre-wrap">
-                    {debugResult}
-                  </p>
-                </div>
-              )}
-              {debugLogs.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-bold text-yellow-900 dark:text-yellow-100">
-                    Debug Logs:
-                  </h4>
-                  <div className="bg-gray-100 dark:bg-gray-800 p-2 rounded-lg max-h-40 overflow-y-auto">
-                    {debugLogs.map((log, index) => (
-                      <p
-                        key={index}
-                        className="text-sm text-gray-900 dark:text-gray-100"
-                      >
-                        {log}
-                      </p>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          </Card>
-        )}
       </div>
     </div>
   );

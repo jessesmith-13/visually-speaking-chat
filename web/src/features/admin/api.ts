@@ -121,55 +121,30 @@ export async function sendEmail(
 export async function getTicketDetails(
   ticketId: string,
 ): Promise<TicketDetails> {
-  const { data, error } = await supabase
-    .from("tickets")
-    .select(
-      `
-      id,
-      event_id,
-      user_id,
-      check_in_count,
-      last_checked_in_at,
-      events (
-        name,
-        date,
-        event_type
-      ),
-      profiles (
-        full_name,
-        email
-      )
-    `,
-    )
-    .eq("id", ticketId)
-    .maybeSingle();
+  // Call Edge Function with admin privileges instead of direct DB query
+  try {
+    const result = await callEdgeFunction<{ ticket: TicketDetails }>(
+      "admin-operations",
+      `/tickets/${ticketId}`,
+      {
+        method: "GET",
+      },
+    );
 
-  if (error || !data) {
-    throw new Error(error?.message || "Ticket not found");
+    return result.ticket;
+  } catch (error: unknown) {
+    const err = error as { message?: string; name?: string; code?: number };
+    if (
+      err.message?.includes("AbortError") ||
+      err.message?.includes("aborted") ||
+      err.name === "AbortError" ||
+      err.code === 20
+    ) {
+      console.log("⚠️ Fetch ticket aborted (component unmounted)");
+      throw new Error("Request aborted");
+    }
+    throw error;
   }
-
-  // Supabase returns events/profiles as arrays, so we need to transform
-  const rawData = data as unknown as {
-    id: string;
-    event_id: string;
-    user_id: string;
-    check_in_count: number;
-    last_checked_in_at: string | null;
-    events: { name: string; date: string; event_type: string }[];
-    profiles: { full_name: string; email: string }[];
-  };
-
-  return {
-    id: rawData.id,
-    event_id: rawData.event_id,
-    user_id: rawData.user_id,
-    check_in_count: rawData.check_in_count,
-    last_checked_in_at: rawData.last_checked_in_at,
-    events: Array.isArray(rawData.events) ? rawData.events[0] : rawData.events,
-    profiles: Array.isArray(rawData.profiles)
-      ? rawData.profiles[0]
-      : rawData.profiles,
-  };
 }
 
 /**
@@ -178,20 +153,36 @@ export async function getTicketDetails(
 export async function verifyAndCheckInTicket(
   ticketId: string,
 ): Promise<TicketVerificationResponse> {
-  const { data, error } =
-    await supabase.functions.invoke<TicketVerificationResponse>(
-      "tickets/verify",
-      {
-        body: { ticketId },
-        method: "POST",
-      },
-    );
+  const { data, error } = await supabase.functions.invoke<
+    TicketVerificationResponse | { error: string }
+  >("tickets/verify", {
+    body: { ticketId },
+    method: "POST",
+  });
 
-  if (error || !data) {
-    throw new Error(error?.message || "Failed to verify ticket");
+  // Handle network/invocation errors
+  if (error) {
+    const errorMessage = error.message || "Failed to verify ticket";
+    console.error("❌ Ticket verification error:", errorMessage);
+    throw new Error(errorMessage);
   }
 
-  return data;
+  if (!data) {
+    throw new Error("No response from ticket verification");
+  }
+
+  // Handle HTTP error responses (400, 404, etc.) - these come in data.error
+  if ("error" in data && data.error) {
+    console.error("❌ Ticket verification failed:", data.error);
+    throw new Error(data.error);
+  }
+
+  // Handle success response with error flag
+  if ("success" in data && !data.success && data.message) {
+    throw new Error(data.message);
+  }
+
+  return data as TicketVerificationResponse;
 }
 
 // Export types for use in components
