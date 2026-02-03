@@ -961,6 +961,29 @@ Deno.serve(async (req) => {
             );
           }
 
+          // ⚠️ PREVENT MULTIPLE CHECK-INS
+          // Allow admins to check in tickets, but warn if already checked in
+          if (ticket.check_in_count > 0 && ticket.last_checked_in_at) {
+            const lastCheckIn = new Date(ticket.last_checked_in_at);
+            const hoursSinceLastCheckIn =
+              (Date.now() - lastCheckIn.getTime()) / (1000 * 60 * 60);
+
+            // If checked in within last 24 hours, reject
+            if (hoursSinceLastCheckIn < 24) {
+              console.error(
+                `❌ Ticket already checked in ${hoursSinceLastCheckIn.toFixed(1)} hours ago`,
+              );
+              return badRequest(
+                `This ticket was already checked in ${Math.floor(hoursSinceLastCheckIn)} hours ago at ${lastCheckIn.toLocaleString()}`,
+                corsHeaders,
+              );
+            }
+
+            console.warn(
+              `⚠️ Ticket previously checked in ${Math.floor(hoursSinceLastCheckIn)} hours ago - allowing re-entry`,
+            );
+          }
+
           // Update ticket check-in
           const now = new Date().toISOString();
           const newCheckInCount = (ticket.check_in_count || 0) + 1;
