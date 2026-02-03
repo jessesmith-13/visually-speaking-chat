@@ -301,7 +301,7 @@ describe("Admin API", () => {
 
       const mockSelect = vi.fn().mockReturnThis();
       const mockEq = vi.fn().mockReturnThis();
-      const mockSingle = vi.fn().mockResolvedValue({
+      const mockMaybeSingle = vi.fn().mockResolvedValue({
         data: mockTicketDataFromSupabase,
         error: null,
       });
@@ -309,16 +309,16 @@ describe("Admin API", () => {
       vi.mocked(supabase.from).mockReturnValue({
         select: mockSelect,
         eq: mockEq,
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       mockSelect.mockReturnValue({
         eq: mockEq,
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       mockEq.mockReturnValue({
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       const result = await api.getTicketDetails("ticket-123");
@@ -326,14 +326,115 @@ describe("Admin API", () => {
       expect(supabase.from).toHaveBeenCalledWith("tickets");
       expect(mockSelect).toHaveBeenCalled();
       expect(mockEq).toHaveBeenCalledWith("id", "ticket-123");
-      expect(mockSingle).toHaveBeenCalled();
+      expect(mockMaybeSingle).toHaveBeenCalled();
       expect(result).toEqual(expectedResult);
+
+      // Verify the transformation happened correctly
+      expect(result.events).not.toBeInstanceOf(Array);
+      expect(result.profiles).not.toBeInstanceOf(Array);
+      expect(result.events).toHaveProperty("name");
+      expect(result.profiles).toHaveProperty("full_name");
+    });
+
+    it("should handle null last_checked_in_at", async () => {
+      const mockTicketDataFromSupabase = {
+        id: "ticket-456",
+        event_id: "event-789",
+        user_id: "user-123",
+        check_in_count: 0,
+        last_checked_in_at: null,
+        events: [
+          {
+            name: "Another Event",
+            date: "2026-03-01T18:00:00.000Z",
+            event_type: "virtual",
+          },
+        ],
+        profiles: [
+          {
+            full_name: "Jane Smith",
+            email: "jane@example.com",
+          },
+        ],
+      };
+
+      const mockSelect = vi.fn().mockReturnThis();
+      const mockEq = vi.fn().mockReturnThis();
+      const mockMaybeSingle = vi.fn().mockResolvedValue({
+        data: mockTicketDataFromSupabase,
+        error: null,
+      });
+
+      vi.mocked(supabase.from).mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        maybeSingle: mockMaybeSingle,
+      } as never);
+
+      mockSelect.mockReturnValue({
+        eq: mockEq,
+        maybeSingle: mockMaybeSingle,
+      } as never);
+
+      mockEq.mockReturnValue({
+        maybeSingle: mockMaybeSingle,
+      } as never);
+
+      const result = await api.getTicketDetails("ticket-456");
+
+      expect(result.last_checked_in_at).toBeNull();
+      expect(result.check_in_count).toBe(0);
+      expect(result.events).toEqual({
+        name: "Another Event",
+        date: "2026-03-01T18:00:00.000Z",
+        event_type: "virtual",
+      });
+    });
+
+    it("should handle empty arrays gracefully (shouldn't happen but defensive)", async () => {
+      const mockTicketDataFromSupabase = {
+        id: "ticket-789",
+        event_id: "event-123",
+        user_id: "user-456",
+        check_in_count: 2,
+        last_checked_in_at: "2026-02-02T10:00:00.000Z",
+        events: [],
+        profiles: [],
+      };
+
+      const mockSelect = vi.fn().mockReturnThis();
+      const mockEq = vi.fn().mockReturnThis();
+      const mockMaybeSingle = vi.fn().mockResolvedValue({
+        data: mockTicketDataFromSupabase,
+        error: null,
+      });
+
+      vi.mocked(supabase.from).mockReturnValue({
+        select: mockSelect,
+        eq: mockEq,
+        maybeSingle: mockMaybeSingle,
+      } as never);
+
+      mockSelect.mockReturnValue({
+        eq: mockEq,
+        maybeSingle: mockMaybeSingle,
+      } as never);
+
+      mockEq.mockReturnValue({
+        maybeSingle: mockMaybeSingle,
+      } as never);
+
+      const result = await api.getTicketDetails("ticket-789");
+
+      // Should return undefined for empty arrays
+      expect(result.events).toBeUndefined();
+      expect(result.profiles).toBeUndefined();
     });
 
     it("should throw error when ticket not found", async () => {
-      const mockSelect = vi.fn().mockReturnThis();
-      const mockEq = vi.fn().mockReturnThis();
-      const mockSingle = vi.fn().mockResolvedValue({
+      const mockSelect = vi.fn();
+      const mockEq = vi.fn();
+      const mockMaybeSingle = vi.fn().mockResolvedValue({
         data: null,
         error: { message: "Ticket not found" },
       });
@@ -341,16 +442,16 @@ describe("Admin API", () => {
       vi.mocked(supabase.from).mockReturnValue({
         select: mockSelect,
         eq: mockEq,
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       mockSelect.mockReturnValue({
         eq: mockEq,
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       mockEq.mockReturnValue({
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       await expect(api.getTicketDetails("invalid-ticket")).rejects.toThrow(
@@ -359,9 +460,9 @@ describe("Admin API", () => {
     });
 
     it("should throw generic error when data is null without error", async () => {
-      const mockSelect = vi.fn().mockReturnThis();
-      const mockEq = vi.fn().mockReturnThis();
-      const mockSingle = vi.fn().mockResolvedValue({
+      const mockSelect = vi.fn();
+      const mockEq = vi.fn();
+      const mockMaybeSingle = vi.fn().mockResolvedValue({
         data: null,
         error: null,
       });
@@ -369,16 +470,16 @@ describe("Admin API", () => {
       vi.mocked(supabase.from).mockReturnValue({
         select: mockSelect,
         eq: mockEq,
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       mockSelect.mockReturnValue({
         eq: mockEq,
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       mockEq.mockReturnValue({
-        single: mockSingle,
+        maybeSingle: mockMaybeSingle,
       } as never);
 
       await expect(api.getTicketDetails("ticket-123")).rejects.toThrow(

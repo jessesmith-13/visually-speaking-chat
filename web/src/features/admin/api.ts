@@ -142,7 +142,7 @@ export async function getTicketDetails(
     `,
     )
     .eq("id", ticketId)
-    .single();
+    .maybeSingle();
 
   if (error || !data) {
     throw new Error(error?.message || "Ticket not found");
