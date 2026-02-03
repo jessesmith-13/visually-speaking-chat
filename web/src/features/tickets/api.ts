@@ -176,7 +176,7 @@ export async function getMyTicketsWithDetails(): Promise<TicketWithEvent[]> {
       status: ticket.status,
       purchased_at: ticket.purchased_at,
       check_in_count: ticket.check_in_count,
-      last_checked_in_at: ticket.last_checked_in_at,
+      last_checked_in_at: ticket.last_checked_in_at ?? undefined,
       events: {
         id: ticket.events[0].id,
         name: ticket.events[0].name,
