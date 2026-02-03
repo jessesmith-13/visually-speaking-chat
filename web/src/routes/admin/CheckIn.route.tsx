@@ -179,8 +179,9 @@ export function CheckIn() {
           console.log("🎯 Ticket ID Match:", ticketIdMatch);
 
           if (ticketIdMatch) {
-            console.log("✅ Verifying ticket:", ticketIdMatch[1]);
-            await verifyTicket(ticketIdMatch[1]);
+            console.log("✅ Navigating to ticket:", ticketIdMatch[1]);
+            // Navigate to the ticket URL so the useEffect handles verification
+            navigate(`/admin/check-in/${ticketIdMatch[1]}`);
           } else {
             console.error(
               "❌ QR pattern didn't match. Full text:",
