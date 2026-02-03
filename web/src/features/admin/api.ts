@@ -130,12 +130,12 @@ export async function getTicketDetails(
       user_id,
       check_in_count,
       last_checked_in_at,
-      events!inner (
+      events (
         name,
         date,
         event_type
       ),
-      profiles!inner (
+      profiles (
         full_name,
         email
       )
@@ -148,8 +148,7 @@ export async function getTicketDetails(
     throw new Error(error?.message || "Ticket not found");
   }
 
-  // TypeScript doesn't know about !inner, so we need to transform the data
-  // Supabase STILL returns events/profiles as arrays even with !inner in TypeScript's view
+  // Supabase returns events/profiles as arrays, so we need to transform
   const rawData = data as unknown as {
     id: string;
     event_id: string;

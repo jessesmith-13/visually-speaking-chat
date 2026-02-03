@@ -259,7 +259,30 @@ describe("Admin API", () => {
 
   describe("getTicketDetails", () => {
     it("should fetch ticket details successfully", async () => {
-      const mockTicketData = {
+      // Supabase returns events and profiles as ARRAYS even without !inner
+      const mockTicketDataFromSupabase = {
+        id: "ticket-123",
+        event_id: "event-456",
+        user_id: "user-789",
+        check_in_count: 1,
+        last_checked_in_at: "2026-02-01T10:00:00.000Z",
+        events: [
+          {
+            name: "Test Event",
+            date: "2026-02-15T18:00:00.000Z",
+            event_type: "in-person",
+          },
+        ],
+        profiles: [
+          {
+            full_name: "John Doe",
+            email: "john@example.com",
+          },
+        ],
+      };
+
+      // Expected transformed result (arrays -> objects)
+      const expectedResult = {
         id: "ticket-123",
         event_id: "event-456",
         user_id: "user-789",
@@ -279,7 +302,7 @@ describe("Admin API", () => {
       const mockSelect = vi.fn().mockReturnThis();
       const mockEq = vi.fn().mockReturnThis();
       const mockSingle = vi.fn().mockResolvedValue({
-        data: mockTicketData,
+        data: mockTicketDataFromSupabase,
         error: null,
       });
 
@@ -304,7 +327,7 @@ describe("Admin API", () => {
       expect(mockSelect).toHaveBeenCalled();
       expect(mockEq).toHaveBeenCalledWith("id", "ticket-123");
       expect(mockSingle).toHaveBeenCalled();
-      expect(result).toEqual(mockTicketData);
+      expect(result).toEqual(expectedResult);
     });
 
     it("should throw error when ticket not found", async () => {
