@@ -23,7 +23,7 @@ export function VideoRoomRoute() {
   const { events, user } = useApp()
   const currentEvent = events.find((e) => e.id === roomId)
   const [matchStatus, setMatchStatus] = useState<
-    'searching' | 'matched' | 'not_started' | 'event_complete'
+    'searching' | 'matched' | 'not_started'
   >('not_started')
   const [roomName, setRoomName] = useState<string>('')
   const [dailyUrl, setDailyUrl] = useState<string>('')
@@ -226,21 +226,6 @@ export function VideoRoomRoute() {
     }
   }, [matchStatus])
 
-  // Auto-leave when event is complete
-  useEffect(() => {
-    if (matchStatus === 'event_complete') {
-      // Clear any ongoing timers
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-        pollingRef.current = null
-      }
-    }
-  }, [matchStatus])
-
   // Memoize handler functions to prevent DailyVideoChat re-renders
   const handleNext = useCallback(async () => {
     if (!currentEvent) return
@@ -252,13 +237,7 @@ export function VideoRoomRoute() {
     // Leave current match and rejoin queue
     try {
       await matchmaking.leaveQueue(currentEvent.id)
-      const result = await matchmaking.joinQueue(currentEvent.id)
-
-      // Check if user has matched with everyone
-      if (result && 'eventComplete' in result && result.eventComplete) {
-        console.log('✅ Event complete - user has matched with everyone')
-        setMatchStatus('event_complete')
-      }
+      await matchmaking.joinQueue(currentEvent.id)
     } catch (error) {
       console.error('Error finding next partner:', error)
     }
@@ -349,17 +328,8 @@ export function VideoRoomRoute() {
 
     try {
       console.log('📋 Joining matchmaking queue...')
-      const result = await matchmaking.joinQueue(currentEvent.id)
-
-      // Check if user has already matched with everyone
-      if (result && 'eventComplete' in result && result.eventComplete) {
-        console.log(
-          '✅ Event complete - user has already matched with everyone'
-        )
-        setMatchStatus('event_complete')
-      } else {
-        setMatchStatus('searching')
-      }
+      await matchmaking.joinQueue(currentEvent.id)
+      setMatchStatus('searching')
     } catch (error: unknown) {
       console.error('❌ Error joining queue:', error)
       const errorMessage =
@@ -426,12 +396,10 @@ export function VideoRoomRoute() {
                   {currentEvent.name}
                 </h2>
                 <div className="flex items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-400 mt-1">
-                  {matchStatus !== 'event_complete' && (
-                    <div className="flex items-center gap-1">
-                      <Users className="size-3 sm:size-4" />
-                      <span>{onlineUsers} online</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <Users className="size-3 sm:size-4" />
+                    <span>{onlineUsers} online</span>
+                  </div>
                   {matchStatus === 'matched' && (
                     <div className="flex items-center gap-1">
                       <Clock className="size-3 sm:size-4" />
@@ -463,31 +431,11 @@ export function VideoRoomRoute() {
                     Searching for a partner...
                   </p>
                   <p className="text-blue-300 text-sm">
-                    We're matching you with someone right now. This usually
-                    takes just a few seconds!
+                    {onlineUsers > 1
+                      ? "We're matching you with someone right now. This usually takes just a few seconds!"
+                      : "Waiting for other participants to join the event. You'll be matched as soon as someone else arrives!"}
                   </p>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Event Complete Banner */}
-          {matchStatus === 'event_complete' && (
-            <div className="mb-4 p-6 bg-green-900/50 border border-green-700 rounded-lg">
-              <div className="text-center">
-                <h3 className="text-2xl font-bold text-green-200 mb-2">
-                  🎉 Event Complete!
-                </h3>
-                <p className="text-green-300 mb-4">
-                  Congratulations! You've connected with everyone at this event.
-                </p>
-                <Button
-                  size="lg"
-                  onClick={() => navigate('/events')}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  Back to Events
-                </Button>
               </div>
             </div>
           )}
@@ -596,19 +544,6 @@ export function VideoRoomRoute() {
                       onLeave={handleLeave}
                       onNext={handleNext}
                     />
-                  ) : matchStatus === 'event_complete' ? (
-                    <div className="absolute inset-0 flex items-center justify-center p-4">
-                      <div className="text-center max-w-md w-full space-y-4">
-                        <div className="text-6xl mb-4">✅</div>
-                        <h3 className="text-2xl font-semibold text-green-400">
-                          All Done!
-                        </h3>
-                        <p className="text-gray-300">
-                          You've successfully connected with all participants at
-                          this event.
-                        </p>
-                      </div>
-                    </div>
                   ) : null}
                 </div>
               </CardContent>
