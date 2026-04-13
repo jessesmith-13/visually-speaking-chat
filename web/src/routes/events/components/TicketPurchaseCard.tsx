@@ -1,40 +1,40 @@
-import { format } from "date-fns";
-import { DollarSign, CreditCard, Trash2, Edit, Tag } from "lucide-react";
-import { Button } from "@/ui/button";
-import { Input } from "@/ui/input";
+import { format } from 'date-fns'
+import { DollarSign, CreditCard, Trash2, Edit, Tag } from 'lucide-react'
+import { Button } from '@/ui/button'
+import { Input } from '@/ui/input'
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/ui/card";
-import { Event } from "@/features/events/types";
-import { User } from "@/features/profile/types";
-import { useState } from "react";
+} from '@/ui/card'
+import { Event } from '@/features/events/types'
+import { User } from '@/features/profile/types'
+import { useState } from 'react'
 
 interface TicketPurchaseCardProps {
-  event: Event;
-  user: User | null;
-  hasTicket: boolean;
-  isEventLive: boolean;
-  isEventPast: boolean;
-  isEventUpcoming: boolean;
-  isPurchasing: boolean;
-  isRefunding: boolean;
-  isCancelling: boolean;
-  userTicketId: string | null;
-  spotsLeft: number;
-  onPurchase: () => void;
-  onJoinEvent: () => void;
-  onSignIn: () => void;
-  onCancelTicket: () => void;
-  onCancelEvent: () => void;
-  onEditEvent: () => void;
+  event: Event
+  user: User | null
+  hasTicket: boolean
+  isEventLive: boolean
+  isEventPast: boolean
+  isEventUpcoming: boolean
+  isPurchasing: boolean
+  isRefunding: boolean
+  isCancelling: boolean
+  userTicketId: string | null
+  spotsLeft: number
+  onPurchase: () => void
+  onJoinEvent: () => void
+  onSignIn: () => void
+  onCancelTicket: () => void
+  onCancelEvent: () => void
+  onEditEvent: () => void
   onApplyPromoCode?: (
-    code: string,
-  ) => Promise<{ success: boolean; discount?: number; message?: string }>;
-  discountAmount?: number;
+    code: string
+  ) => Promise<{ success: boolean; discount?: number; message?: string }>
+  discountAmount?: number
 }
 
 export function TicketPurchaseCard({
@@ -58,36 +58,36 @@ export function TicketPurchaseCard({
   onApplyPromoCode,
   discountAmount = 0,
 }: TicketPurchaseCardProps) {
-  const isAdmin = user?.isAdmin || false;
-  const canJoinEvent = hasTicket || isAdmin;
-  const [promoCode, setPromoCode] = useState("");
-  const [applyingPromo, setApplyingPromo] = useState(false);
-  const [promoMessage, setPromoMessage] = useState("");
+  const isAdmin = user?.isAdmin || false
+  const canJoinEvent = hasTicket || isAdmin
+  const [promoCode, setPromoCode] = useState('')
+  const [applyingPromo, setApplyingPromo] = useState(false)
+  const [promoMessage, setPromoMessage] = useState('')
 
-  const finalPrice = Math.max(0, event.price - discountAmount / 100);
+  const finalPrice = Math.max(0, event.price - discountAmount / 100)
 
   const handleApplyPromo = async () => {
-    if (!onApplyPromoCode || !promoCode.trim()) return;
+    if (!onApplyPromoCode || !promoCode.trim()) return
 
-    setApplyingPromo(true);
-    setPromoMessage("");
+    setApplyingPromo(true)
+    setPromoMessage('')
 
     try {
-      const result = await onApplyPromoCode(promoCode.trim());
+      const result = await onApplyPromoCode(promoCode.trim())
       if (result.success) {
-        setPromoMessage(`✓ Promo code applied! ${result.message || ""}`);
+        setPromoMessage(`✓ Promo code applied! ${result.message || ''}`)
       } else {
-        setPromoMessage(`✗ ${result.message || "Invalid promo code"}`);
+        setPromoMessage(`✗ ${result.message || 'Invalid promo code'}`)
       }
     } catch {
-      setPromoMessage(`✗ Failed to apply promo code`);
+      setPromoMessage(`✗ Failed to apply promo code`)
     } finally {
-      setApplyingPromo(false);
+      setApplyingPromo(false)
     }
-  };
+  }
 
   return (
-    <Card className="sticky top-4">
+    <Card className="top-4">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <DollarSign className="size-5" />${event.price}
@@ -95,7 +95,7 @@ export function TicketPurchaseCard({
         <CardDescription>
           {spotsLeft > 0 ? (
             <span className="text-green-600">
-              {spotsLeft} spot{spotsLeft !== 1 ? "s" : ""} left
+              {spotsLeft} spot{spotsLeft !== 1 ? 's' : ''} left
             </span>
           ) : (
             <span className="text-red-600">Event Full</span>
@@ -114,7 +114,7 @@ export function TicketPurchaseCard({
           </>
         ) : canJoinEvent ? (
           <>
-            {event.status === "cancelled" ? (
+            {event.status === 'cancelled' ? (
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-800 font-medium">
                   ⚠️ This event has been cancelled
@@ -131,11 +131,11 @@ export function TicketPurchaseCard({
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800 font-medium mb-1">
                     {isAdmin && !hasTicket
-                      ? "👑 Admin Access Granted"
-                      : "✓ You have a ticket for this event"}
+                      ? '👑 Admin Access Granted'
+                      : '✓ You have a ticket for this event'}
                   </p>
                   <p className="text-xs text-green-700">
-                    Event starts at {format(new Date(event.date), "p")}
+                    Event starts at {format(new Date(event.date), 'p')}
                   </p>
                 </div>
                 <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
@@ -149,20 +149,20 @@ export function TicketPurchaseCard({
                 <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800 font-medium">
                     {isAdmin && !hasTicket
-                      ? "👑 Admin Access - No Ticket Required"
-                      : "✓ You have a ticket for this event"}
+                      ? '👑 Admin Access - No Ticket Required'
+                      : '✓ You have a ticket for this event'}
                   </p>
                 </div>
                 <Button
                   className="w-full"
                   onClick={onJoinEvent}
-                  disabled={isEventPast || event.eventType === "in-person"}
+                  disabled={isEventPast || event.eventType === 'in-person'}
                 >
-                  {event.eventType === "in-person"
-                    ? "In-Person Event - Check In At Venue"
+                  {event.eventType === 'in-person'
+                    ? 'In-Person Event - Check In At Venue'
                     : isEventLive
-                      ? "Join Now"
-                      : "Join Event"}
+                      ? 'Join Now'
+                      : 'Join Event'}
                 </Button>
               </>
             )}
@@ -171,14 +171,14 @@ export function TicketPurchaseCard({
                 className="w-full mt-2"
                 variant="destructive"
                 onClick={onCancelEvent}
-                disabled={isCancelling || event.status === "cancelled"}
+                disabled={isCancelling || event.status === 'cancelled'}
               >
                 <Trash2 className="size-4 mr-2" />
                 {isCancelling
-                  ? "Cancelling Event..."
-                  : event.status === "cancelled"
-                    ? "Event Cancelled"
-                    : "Cancel Event (Admin)"}
+                  ? 'Cancelling Event...'
+                  : event.status === 'cancelled'
+                    ? 'Event Cancelled'
+                    : 'Cancel Event (Admin)'}
               </Button>
             )}
             {isAdmin && (
@@ -199,13 +199,13 @@ export function TicketPurchaseCard({
                 disabled={isRefunding}
               >
                 <Trash2 className="size-4 mr-2" />
-                {isRefunding ? "Refunding..." : "Cancel Ticket"}
+                {isRefunding ? 'Refunding...' : 'Cancel Ticket'}
               </Button>
             )}
           </>
         ) : (
           <>
-            {event.status === "cancelled" ? (
+            {event.status === 'cancelled' ? (
               <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                 <p className="text-sm text-red-800 font-medium text-center">
                   ⚠️ This event has been cancelled
@@ -255,14 +255,14 @@ export function TicketPurchaseCard({
                     disabled={applyingPromo}
                   >
                     <Tag className="size-4 mr-2" />
-                    {applyingPromo ? "Applying..." : "Apply Promo Code"}
+                    {applyingPromo ? 'Applying...' : 'Apply Promo Code'}
                   </Button>
                   {promoMessage && (
                     <p
                       className={`text-xs ${
-                        promoMessage.startsWith("✓")
-                          ? "text-green-600"
-                          : "text-red-600"
+                        promoMessage.startsWith('✓')
+                          ? 'text-green-600'
+                          : 'text-red-600'
                       } text-center`}
                     >
                       {promoMessage}
@@ -275,7 +275,7 @@ export function TicketPurchaseCard({
                   disabled={spotsLeft === 0 || isPurchasing || isEventPast}
                 >
                   <CreditCard className="size-4 mr-2" />
-                  {isPurchasing ? "Purchasing..." : "Purchase Ticket"}
+                  {isPurchasing ? 'Purchasing...' : 'Purchase Ticket'}
                 </Button>
                 <p className="text-xs text-gray-500 text-center">
                   Secure payment powered by Stripe
@@ -286,5 +286,5 @@ export function TicketPurchaseCard({
         )}
       </CardContent>
     </Card>
-  );
+  )
 }
