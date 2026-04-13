@@ -190,40 +190,6 @@ Deno.serve(async (req) => {
 
           console.log('✅ User added to queue')
 
-          // Check if user has already matched with everyone
-          const { data: hasMatchedAll, error: checkError } =
-            await supabaseAdmin.rpc('has_matched_everyone', {
-              p_event_id: eventId,
-              p_user_id: userId,
-            })
-
-          if (checkError) {
-            console.error('❌ RPC has_matched_everyone error:', checkError)
-            // Don't fail - continue with matching attempt
-          } else if (hasMatchedAll) {
-            console.log(
-              '✅ User has already matched with everyone - event complete'
-            )
-
-            // Remove user from queue
-            await supabaseAdmin.rpc('leave_queue', {
-              p_event_id: eventId,
-              p_user_id: userId,
-            })
-
-            return json(
-              {
-                success: true,
-                status: 'completed',
-                matched: false,
-                eventComplete: true,
-                message: "You've already met everyone at this event!",
-              },
-              200,
-              corsHeaders
-            )
-          }
-
           // Try to match immediately using atomic RPC
           const { data: matchData, error: matchError } =
             await supabaseAdmin.rpc('match_two_users', {
@@ -395,39 +361,6 @@ Deno.serve(async (req) => {
           }
 
           console.log(`🔄 User requesting next match: event=${eventId}`)
-
-          // Check if user has matched with everyone
-          const { data: hasMatchedAll, error: checkError } =
-            await supabaseAdmin.rpc('has_matched_everyone', {
-              p_event_id: eventId,
-              p_user_id: userId,
-            })
-
-          if (checkError) {
-            console.error('❌ RPC has_matched_everyone error:', checkError)
-            return serverError(checkError, corsHeaders)
-          }
-
-          if (hasMatchedAll) {
-            console.log('✅ User has matched with everyone - event complete')
-
-            // Remove user from queue
-            await supabaseAdmin.rpc('leave_queue', {
-              p_event_id: eventId,
-              p_user_id: userId,
-            })
-
-            return json(
-              {
-                success: true,
-                matched: false,
-                eventComplete: true,
-                message: "You've met everyone at this event!",
-              },
-              200,
-              corsHeaders
-            )
-          }
 
           // Use RPC to reset match status
           const { data: resetData, error: resetError } =
