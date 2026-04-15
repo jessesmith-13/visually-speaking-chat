@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Button } from "@/ui/button";
-import { Card, CardContent } from "@/ui/card";
-import { Badge } from "@/ui/badge";
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { Button } from '@/ui/button'
+import { Card, CardContent } from '@/ui/card'
+import { Badge } from '@/ui/badge'
 import {
   ArrowLeft,
   Users,
@@ -10,61 +10,62 @@ import {
   Loader2,
   SkipForward,
   PhoneOff,
-} from "lucide-react";
-import { useApp } from "@/app/hooks";
-import { useHasTicket } from "@/features/tickets/hooks";
-import { DailyVideoChat } from "@/features/matchmaking/components/DailyVideoChat";
-import { matchmaking } from "@/lib/edge/client";
-import { supabase } from "@/lib/supabase/client";
+} from 'lucide-react'
+import { useApp } from '@/app/hooks'
+import { useHasTicket } from '@/features/tickets/hooks'
+import { DailyVideoChat } from '@/features/matchmaking/components/DailyVideoChat'
+import { matchmaking } from '@/lib/edge/client'
+import { supabase } from '@/lib/supabase/client'
 
 export function VideoRoomRoute() {
-  const navigate = useNavigate();
-  const { roomId } = useParams<{ roomId: string }>();
-  const { events, user } = useApp();
-  const currentEvent = events.find((e) => e.id === roomId);
+  const navigate = useNavigate()
+  const { roomId } = useParams<{ roomId: string }>()
+  const { events, user } = useApp()
+  const currentEvent = events.find((e) => e.id === roomId)
   const [matchStatus, setMatchStatus] = useState<
-    "searching" | "matched" | "not_started"
-  >("not_started");
-  const [roomName, setRoomName] = useState<string>("");
-  const [dailyUrl, setDailyUrl] = useState<string>("");
-  const [connectionTime, setConnectionTime] = useState(300); // Start at 300 seconds (5 minutes)
-  const [onlineUsers, setOnlineUsers] = useState(0);
-  const [isJoining, setIsJoining] = useState(false);
-  const [permissionError, setPermissionError] = useState<string>("");
-  const [showTimeWarning, setShowTimeWarning] = useState(false); // For 30-second flash
-  const timerRef = useRef<number | null>(null);
-  const pollingRef = useRef<number | null>(null);
-  const handleNextRef = useRef<(() => Promise<void>) | null>(null); // Store handleNext reference
+    'searching' | 'matched' | 'not_started'
+  >('not_started')
+  const [roomName, setRoomName] = useState<string>('')
+  const [dailyUrl, setDailyUrl] = useState<string>('')
+  const [connectionTime, setConnectionTime] = useState(300) // Start at 300 seconds (5 minutes)
+  const [onlineUsers, setOnlineUsers] = useState(0)
+  const [isJoining, setIsJoining] = useState(false)
+  const [permissionError, setPermissionError] = useState<string>('')
+  const [showTimeWarning, setShowTimeWarning] = useState(false) // For 30-second flash
+  const [showCountdown, setShowCountdown] = useState(false) // For 5-second countdown
+  const timerRef = useRef<number | null>(null)
+  const pollingRef = useRef<number | null>(null)
+  const handleNextRef = useRef<(() => Promise<void>) | null>(null) // Store handleNext reference
 
-  const hasTicket = useHasTicket(currentEvent?.id || "");
-  const isAdmin = user?.isAdmin || false;
-  const canJoinEvent = hasTicket || isAdmin;
+  const hasTicket = useHasTicket(currentEvent?.id || '')
+  const isAdmin = user?.isAdmin || false
+  const canJoinEvent = hasTicket || isAdmin
 
   // Subscribe to matchmaking updates
   useEffect(() => {
-    if (!currentEvent || !user || !canJoinEvent) return;
+    if (!currentEvent || !user || !canJoinEvent) return
 
-    let unsubscribe: (() => void) | undefined;
+    let unsubscribe: (() => void) | undefined
 
     const setupSubscription = async () => {
       try {
         // Check initial status (silently fail if JWT issues)
-        const status = await matchmaking.getStatus(currentEvent.id);
+        const status = await matchmaking.getStatus(currentEvent.id)
 
-        if (status?.status === "matched" && status.roomId) {
-          setMatchStatus("matched");
-          setRoomName(status.roomId);
-        } else if (status?.status === "waiting") {
-          setMatchStatus("searching");
+        if (status?.status === 'matched' && status.roomId) {
+          setMatchStatus('matched')
+          setRoomName(status.roomId)
+        } else if (status?.status === 'waiting') {
+          setMatchStatus('searching')
         }
       } catch (error: unknown) {
         const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
+          error instanceof Error ? error.message : 'Unknown error'
         // Silently ignore JWT errors - user can still join queue via button
         console.warn(
-          "⚠️ Could not fetch initial matchmaking status (will retry on join):",
-          errorMessage,
-        );
+          '⚠️ Could not fetch initial matchmaking status (will retry on join):',
+          errorMessage
+        )
       }
 
       // Subscribe to changes
@@ -72,272 +73,278 @@ export function VideoRoomRoute() {
         currentEvent.id,
         user.id,
         async (data) => {
-          console.log("Matchmaking update received:", data);
+          console.log('Matchmaking update received:', data)
 
           if (data.is_matched && data.current_room_id) {
-            setMatchStatus("matched");
-            setRoomName(data.current_room_id);
+            setMatchStatus('matched')
+            setRoomName(data.current_room_id)
           } else if (!data.is_matched) {
             // Partner left or match was broken - go back to searching
-            console.log(
-              "🔄 Partner left or match ended, returning to queue...",
-            );
-            setMatchStatus("searching");
-            setRoomName("");
-            setDailyUrl("");
-            setConnectionTime(300); // Reset timer
+            console.log('🔄 Partner left or match ended, returning to queue...')
+            setMatchStatus('searching')
+            setRoomName('')
+            setDailyUrl('')
+            setConnectionTime(300) // Reset timer
           }
-        },
-      );
-    };
+        }
+      )
+    }
 
-    setupSubscription();
+    setupSubscription()
 
     return () => {
       if (unsubscribe) {
-        unsubscribe();
+        unsubscribe()
       }
-    };
-  }, [currentEvent, user, canJoinEvent]);
+    }
+  }, [currentEvent, user, canJoinEvent])
 
   // Fetch Daily.co URL when we get a room match
   useEffect(() => {
-    if (!roomName) return;
+    if (!roomName) return
 
     const fetchDailyUrl = async () => {
-      console.log("🎥 Fetching Daily.co URL for room:", roomName);
+      console.log('🎥 Fetching Daily.co URL for room:', roomName)
 
       try {
         const { data, error } = await supabase
-          .from("video_rooms")
-          .select("daily_url")
-          .eq("id", roomName)
-          .single();
+          .from('video_rooms')
+          .select('daily_url')
+          .eq('id', roomName)
+          .single()
 
         if (error) {
-          console.error("❌ Error fetching Daily URL:", error);
-          return;
+          console.error('❌ Error fetching Daily URL:', error)
+          return
         }
 
         if (data?.daily_url) {
-          console.log("✅ Daily.co URL found:", data.daily_url);
-          setDailyUrl(data.daily_url);
+          console.log('✅ Daily.co URL found:', data.daily_url)
+          setDailyUrl(data.daily_url)
         } else {
-          console.warn("⚠️ No Daily URL yet, will retry...");
+          console.warn('⚠️ No Daily URL yet, will retry...')
           // Retry after 2 seconds if URL not ready yet
-          setTimeout(fetchDailyUrl, 2000);
+          setTimeout(fetchDailyUrl, 2000)
         }
       } catch (error) {
-        console.error("❌ Error fetching Daily URL:", error);
+        console.error('❌ Error fetching Daily URL:', error)
       }
-    };
+    }
 
-    fetchDailyUrl();
-  }, [roomName]);
+    fetchDailyUrl()
+  }, [roomName])
 
   // Polling for matches while searching
   useEffect(() => {
-    if (!currentEvent || matchStatus !== "searching") {
+    if (!currentEvent || matchStatus !== 'searching') {
       // Clear polling if not searching
       if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
       }
-      return;
+      return
     }
 
-    console.log("🔄 Starting polling for matches...");
+    console.log('🔄 Starting polling for matches...')
 
     // Poll every 3 seconds to check for matches
     pollingRef.current = window.setInterval(async () => {
-      console.log("🔄 Polling for match...");
+      console.log('🔄 Polling for match...')
 
       try {
         // Just check our status - matching happens automatically on the backend
-        const status = await matchmaking.getStatus(currentEvent.id);
+        const status = await matchmaking.getStatus(currentEvent.id)
 
-        if (status?.status === "matched" && status.roomId) {
-          console.log("✅ Match found via polling!");
-          setMatchStatus("matched");
-          setRoomName(status.roomId);
+        if (status?.status === 'matched' && status.roomId) {
+          console.log('✅ Match found via polling!')
+          setMatchStatus('matched')
+          setRoomName(status.roomId)
         }
       } catch (error: unknown) {
         const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-        console.warn("⚠️ Polling error:", errorMessage);
+          error instanceof Error ? error.message : 'Unknown error'
+        console.warn('⚠️ Polling error:', errorMessage)
       }
-    }, 3000);
+    }, 3000)
 
     return () => {
       if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
+        clearInterval(pollingRef.current)
+        pollingRef.current = null
       }
-    };
-  }, [currentEvent, matchStatus]);
+    }
+  }, [currentEvent, matchStatus])
 
   // Timer for connection duration
   useEffect(() => {
-    if (matchStatus === "matched") {
+    if (matchStatus === 'matched') {
       timerRef.current = window.setInterval(() => {
         setConnectionTime((prev) => {
-          const newTime = prev - 1; // Count DOWN
+          const newTime = prev - 1 // Count DOWN
 
           // Trigger 30-second warning flash
           if (newTime === 30) {
-            setShowTimeWarning(true);
+            setShowTimeWarning(true)
             // Flash for 3 seconds then hide
-            setTimeout(() => setShowTimeWarning(false), 3000);
+            setTimeout(() => setShowTimeWarning(false), 3000)
+          }
+
+          // Show countdown when 5 seconds or less remain
+          if (newTime <= 5 && newTime > 0) {
+            setShowCountdown(true)
+          } else {
+            setShowCountdown(false)
           }
 
           // Auto-next when timer hits 0
           if (newTime === 0) {
             console.log(
-              "⏰ Timer reached 0:00 - automatically finding next partner...",
-            );
+              '⏰ Timer reached 0:00 - automatically finding next partner...'
+            )
             // Use ref to avoid closure issues
-            handleNextRef.current?.();
+            handleNextRef.current?.()
           }
 
           // Stop at 0
-          return Math.max(0, newTime);
-        });
-      }, 1000);
+          return Math.max(0, newTime)
+        })
+      }, 1000)
     } else {
       if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+        clearInterval(timerRef.current)
+        timerRef.current = null
       }
-      setConnectionTime(300); // Reset to 5 minutes (300 seconds)
-      setShowTimeWarning(false);
+      setConnectionTime(300) // Reset to 5 minutes (300 seconds)
+      setShowTimeWarning(false)
+      setShowCountdown(false)
     }
 
     return () => {
       if (timerRef.current) {
-        clearInterval(timerRef.current);
+        clearInterval(timerRef.current)
       }
-    };
-  }, [matchStatus]);
+    }
+  }, [matchStatus])
 
   // Memoize handler functions to prevent DailyVideoChat re-renders
   const handleNext = useCallback(async () => {
-    if (!currentEvent) return;
+    if (!currentEvent) return
 
-    setMatchStatus("searching");
-    setConnectionTime(300); // Reset to 5 minutes
-    setDailyUrl("");
+    setMatchStatus('searching')
+    setConnectionTime(300) // Reset to 5 minutes
+    setDailyUrl('')
 
     // Leave current match and rejoin queue
     try {
-      await matchmaking.leaveQueue(currentEvent.id);
-      await matchmaking.joinQueue(currentEvent.id);
+      await matchmaking.leaveQueue(currentEvent.id)
+      await matchmaking.joinQueue(currentEvent.id)
     } catch (error) {
-      console.error("Error finding next partner:", error);
+      console.error('Error finding next partner:', error)
     }
-  }, [currentEvent]);
+  }, [currentEvent])
 
   // Store handleNext in ref so timer can call it
   useEffect(() => {
-    handleNextRef.current = handleNext;
-  }, [handleNext]);
+    handleNextRef.current = handleNext
+  }, [handleNext])
 
   // Track actual online users in the matchmaking queue
   useEffect(() => {
-    if (!currentEvent) return;
+    if (!currentEvent) return
 
     // Fetch initial count
     const fetchOnlineCount = async () => {
       try {
         const { count, error } = await supabase
-          .from("matchmaking_queue")
-          .select("*", { count: "exact", head: true })
-          .eq("event_id", currentEvent.id);
+          .from('matchmaking_queue')
+          .select('*', { count: 'exact', head: true })
+          .eq('event_id', currentEvent.id)
 
         if (!error && count !== null) {
-          setOnlineUsers(count);
+          setOnlineUsers(count)
         }
       } catch (error) {
-        console.error("Error fetching online users count:", error);
+        console.error('Error fetching online users count:', error)
       }
-    };
+    }
 
-    fetchOnlineCount();
+    fetchOnlineCount()
 
     // Subscribe to real-time changes in the queue
     const channel = supabase
       .channel(`online-users-${currentEvent.id}`)
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "matchmaking_queue",
+          event: '*',
+          schema: 'public',
+          table: 'matchmaking_queue',
           filter: `event_id=eq.${currentEvent.id}`,
         },
         () => {
           // Refetch count when queue changes
-          fetchOnlineCount();
-        },
+          fetchOnlineCount()
+        }
       )
-      .subscribe();
+      .subscribe()
 
     return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [currentEvent]);
+      supabase.removeChannel(channel)
+    }
+  }, [currentEvent])
 
   // Cleanup on unmount - use ref to track status
-  const matchStatusRef = useRef(matchStatus);
-  matchStatusRef.current = matchStatus;
+  const matchStatusRef = useRef(matchStatus)
+  matchStatusRef.current = matchStatus
 
   useEffect(() => {
     return () => {
-      // Only leave if actually in queue or matched
+      // Only leave if actually in queue or matched (not if event complete)
       if (
         currentEvent &&
-        (matchStatusRef.current === "searching" ||
-          matchStatusRef.current === "matched")
+        (matchStatusRef.current === 'searching' ||
+          matchStatusRef.current === 'matched')
       ) {
         matchmaking.leaveQueue(currentEvent.id).catch((err) => {
-          console.warn("⚠️ Error leaving queue on unmount:", err);
-        });
+          console.warn('⚠️ Error leaving queue on unmount:', err)
+        })
       }
-    };
-  }, [currentEvent]);
+    }
+  }, [currentEvent])
 
   // Memoize handler functions to prevent DailyVideoChat re-renders
   const handleLeave = useCallback(async () => {
     if (currentEvent) {
-      await matchmaking.leaveQueue(currentEvent.id);
+      await matchmaking.leaveQueue(currentEvent.id)
     }
-    navigate("/events");
-  }, [currentEvent, navigate]);
+    navigate('/events')
+  }, [currentEvent, navigate])
 
   const handleStartMatching = async () => {
-    if (!currentEvent) return;
+    if (!currentEvent) return
 
-    setIsJoining(true);
-    setPermissionError("");
+    setIsJoining(true)
+    setPermissionError('')
 
     try {
-      console.log("📋 Joining matchmaking queue...");
-      await matchmaking.joinQueue(currentEvent.id);
-      setMatchStatus("searching");
+      console.log('📋 Joining matchmaking queue...')
+      await matchmaking.joinQueue(currentEvent.id)
+      setMatchStatus('searching')
     } catch (error: unknown) {
-      console.error("❌ Error joining queue:", error);
+      console.error('❌ Error joining queue:', error)
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      setPermissionError(`Failed to join queue: ${errorMessage}`);
+        error instanceof Error ? error.message : 'Unknown error'
+      setPermissionError(`Failed to join queue: ${errorMessage}`)
     } finally {
-      setIsJoining(false);
+      setIsJoining(false)
     }
-  };
+  }
 
   const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+    const mins = Math.floor(seconds / 60)
+    const secs = seconds % 60
+    return `${mins}:${secs.toString().padStart(2, '0')}`
+  }
 
   // Handle cases where user is not logged in or does not have a ticket
   if (!currentEvent || !user) {
@@ -346,11 +353,11 @@ export function VideoRoomRoute() {
         <Card>
           <CardContent className="pt-6">
             <p className="mb-4">Please select an event first</p>
-            <Button onClick={() => navigate("/events")}>Go to Events</Button>
+            <Button onClick={() => navigate('/events')}>Go to Events</Button>
           </CardContent>
         </Card>
       </div>
-    );
+    )
   }
 
   if (!canJoinEvent) {
@@ -365,7 +372,7 @@ export function VideoRoomRoute() {
           </CardContent>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
@@ -393,7 +400,7 @@ export function VideoRoomRoute() {
                     <Users className="size-3 sm:size-4" />
                     <span>{onlineUsers} online</span>
                   </div>
-                  {matchStatus === "matched" && (
+                  {matchStatus === 'matched' && (
                     <div className="flex items-center gap-1">
                       <Clock className="size-3 sm:size-4" />
                       <span>{formatTime(connectionTime)}</span>
@@ -415,7 +422,7 @@ export function VideoRoomRoute() {
       {/* Video Area - Scrollable */}
       <div className="flex-1 overflow-y-auto">
         <div className="w-full px-2 sm:px-4 py-4 sm:py-8 max-w-6xl mx-auto">
-          {matchStatus === "searching" && (
+          {matchStatus === 'searching' && (
             <div className="mb-4 p-4 bg-blue-900/50 border border-blue-700 rounded-lg">
               <div className="flex items-start gap-3">
                 <Loader2 className="size-5 text-blue-400 mt-0.5 flex-shrink-0 animate-spin" />
@@ -424,8 +431,9 @@ export function VideoRoomRoute() {
                     Searching for a partner...
                   </p>
                   <p className="text-blue-300 text-sm">
-                    We're matching you with someone right now. This usually
-                    takes just a few seconds!
+                    {onlineUsers > 1
+                      ? "We're matching you with someone right now. This usually takes just a few seconds!"
+                      : "Waiting for other participants to join the event. You'll be matched as soon as someone else arrives!"}
                   </p>
                 </div>
               </div>
@@ -439,8 +447,8 @@ export function VideoRoomRoute() {
                 <div
                   className={`relative aspect-video bg-gray-900 rounded-lg overflow-hidden ${
                     showTimeWarning
-                      ? "ring-8 ring-yellow-500 animate-pulse"
-                      : ""
+                      ? 'ring-8 ring-yellow-500 animate-pulse'
+                      : ''
                   }`}
                 >
                   {/* 30-Second Warning Overlay */}
@@ -457,7 +465,35 @@ export function VideoRoomRoute() {
                     </div>
                   )}
 
-                  {matchStatus === "not_started" ? (
+                  {/* 5-Second Countdown Overlay */}
+                  {showCountdown &&
+                    connectionTime <= 5 &&
+                    connectionTime > 0 && (
+                      <div className="absolute inset-0 z-50 pointer-events-none flex items-center justify-center">
+                        <div className="relative">
+                          {/* Pulsing background circle */}
+                          <div
+                            className="absolute inset-0 bg-red-500 rounded-full blur-3xl opacity-50 animate-pulse"
+                            style={{
+                              width: '200px',
+                              height: '200px',
+                              left: '50%',
+                              top: '50%',
+                              transform: 'translate(-50%, -50%)',
+                            }}
+                          />
+
+                          {/* Countdown number */}
+                          <div className="relative bg-red-600 text-white rounded-full w-32 h-32 sm:w-40 sm:h-40 flex items-center justify-center shadow-2xl border-4 border-white animate-pulse">
+                            <span className="text-6xl sm:text-7xl font-bold tabular-nums">
+                              {connectionTime}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                  {matchStatus === 'not_started' ? (
                     <div className="absolute inset-0 flex items-center justify-center p-4 sm:p-6">
                       <div className="text-center max-w-md w-full space-y-4 sm:space-y-6">
                         <Users className="size-16 sm:size-20 text-gray-600 mx-auto" />
@@ -487,19 +523,19 @@ export function VideoRoomRoute() {
                               Joining Queue...
                             </>
                           ) : (
-                            "Start Matching"
+                            'Start Matching'
                           )}
                         </Button>
                       </div>
                     </div>
-                  ) : matchStatus === "searching" ? (
+                  ) : matchStatus === 'searching' ? (
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="text-center">
                         <Loader2 className="size-12 text-blue-500 mx-auto mb-4 animate-spin" />
                         <p className="text-gray-400">Finding your match...</p>
                       </div>
                     </div>
-                  ) : matchStatus === "matched" ? (
+                  ) : matchStatus === 'matched' ? (
                     // ALWAYS render DailyVideoChat when matched - don't wait for dailyUrl
                     // This prevents remounting when dailyUrl arrives
                     <DailyVideoChat
@@ -515,7 +551,7 @@ export function VideoRoomRoute() {
           </div>
 
           {/* Controls - Only show when matched and in call */}
-          {matchStatus === "matched" && dailyUrl && (
+          {matchStatus === 'matched' && dailyUrl && (
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4 px-4">
               <Button
                 size="lg"
@@ -579,5 +615,5 @@ export function VideoRoomRoute() {
         </div>
       </div>
     </div>
-  );
+  )
 }

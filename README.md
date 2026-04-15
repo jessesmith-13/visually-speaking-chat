@@ -1,2 +1,2 @@
 # visually-speaking-chat
-An event maker for deaf folks to meet via video calls
+An event maker for the ASL Community to meet via video calls
