@@ -1,210 +1,304 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
-import { email, adminOperations } from "@/lib/edge/client";
-import { useApp } from "@/app/hooks";
-import { Button } from "@/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/ui/card";
-import { Input } from "@/ui/input";
-import { Textarea } from "@/ui/textarea";
-import { Checkbox } from "@/ui/checkbox";
-import { Badge } from "@/ui/badge";
-import { ArrowLeft, Mail, CheckCircle, Send } from "lucide-react";
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { email, adminOperations } from '@/lib/edge/client'
+import { useApp } from '@/app/hooks'
+import { Button } from '@/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/ui/card'
+import { Input } from '@/ui/input'
+import { Textarea } from '@/ui/textarea'
+import { Checkbox } from '@/ui/checkbox'
+import { Badge } from '@/ui/badge'
+import {
+  ArrowLeft,
+  Mail,
+  CheckCircle,
+  Send,
+  Filter,
+  Link as LinkIcon,
+} from 'lucide-react'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/ui/dropdown-menu'
+import { useEvents } from '@/features/events/hooks'
 
 interface UserProfile {
-  id: string;
-  email: string;
-  full_name: string | null;
-  created_at: string;
+  id: string
+  email: string
+  full_name: string | null
+  created_at: string
 }
 
 export function AdminEmailRoute() {
-  const navigate = useNavigate();
-  const { user } = useApp();
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set());
-  const [subject, setSubject] = useState("");
-  const [message, setMessage] = useState("");
-  const [sending, setSending] = useState(false);
+  const navigate = useNavigate()
+  const { user } = useApp()
+  const { events, loading: eventsLoading } = useEvents()
+  const [users, setUsers] = useState<UserProfile[]>([])
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]) // Store all users
+  const [loading, setLoading] = useState(true)
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
+  const [selectedEventFilter, setSelectedEventFilter] = useState<string>('all')
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
 
   useEffect(() => {
-    let isMounted = true;
+    let isMounted = true
 
     const loadUsers = async () => {
-      if (!isMounted) return;
+      if (!isMounted) return
 
-      setLoading(true);
-      console.log("🔄 [EMAIL PAGE] Starting to fetch users...");
+      setLoading(true)
+      console.log('🔄 [EMAIL PAGE] Starting to fetch users...')
 
       try {
-        console.log("🔄 [EMAIL PAGE] Calling adminOperations.getAllUsers()...");
+        console.log('🔄 [EMAIL PAGE] Calling adminOperations.getAllUsers()...')
 
-        const data = await adminOperations.getAllUsers();
+        const data = await adminOperations.getAllUsers()
 
-        if (!isMounted) return;
+        if (!isMounted) return
 
         console.log(
-          `✅ [EMAIL PAGE] Successfully fetched ${data?.length || 0} users`,
-        );
+          `✅ [EMAIL PAGE] Successfully fetched ${data?.length || 0} users`
+        )
 
-        setUsers(data || []);
-        setLoading(false);
+        setAllUsers(data || [])
+        setUsers(data || [])
+        setLoading(false)
       } catch (error: unknown) {
-        if (!isMounted) return;
+        if (!isMounted) return
 
         const errorMessage =
-          error instanceof Error ? error.message : "Unknown error";
-        console.error("❌ [EMAIL PAGE] Error in loadUsers:", error);
+          error instanceof Error ? error.message : 'Unknown error'
+        console.error('❌ [EMAIL PAGE] Error in loadUsers:', error)
 
-        toast.error(`Failed to load users: ${errorMessage}`);
-        setUsers([]);
-        setLoading(false);
+        toast.error(`Failed to load users: ${errorMessage}`)
+        setUsers([])
+        setLoading(false)
       }
-    };
+    }
 
-    loadUsers();
+    loadUsers()
 
     return () => {
-      isMounted = false;
-    };
-  }, []);
+      isMounted = false
+    }
+  }, [])
+
+  // Filter users based on selected event
+  useEffect(() => {
+    let isMounted = true
+
+    const filterUsers = async () => {
+      if (selectedEventFilter === 'all') {
+        setUsers(allUsers)
+        return
+      }
+
+      try {
+        console.log(
+          `🔄 Fetching participants for event: ${selectedEventFilter}`
+        )
+        const participants =
+          await adminOperations.getEventParticipants(selectedEventFilter)
+
+        if (!isMounted) return
+
+        // Get user IDs who have tickets for this event
+        const participantUserIds = new Set(participants.map((p) => p.user_id))
+
+        // Filter allUsers to only show participants
+        const filteredUsers = allUsers.filter((u) =>
+          participantUserIds.has(u.id)
+        )
+
+        console.log(`✅ Filtered to ${filteredUsers.length} participants`)
+        setUsers(filteredUsers)
+
+        // Clear selection when filter changes
+        setSelectedUsers(new Set())
+      } catch (error: unknown) {
+        if (!isMounted) return
+
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error'
+        console.error('❌ Error filtering users by event:', error)
+        toast.error(`Failed to filter users: ${errorMessage}`)
+      }
+    }
+
+    filterUsers()
+
+    return () => {
+      isMounted = false
+    }
+  }, [selectedEventFilter, allUsers])
 
   const toggleUser = (userId: string) => {
-    const newSelected = new Set(selectedUsers);
+    const newSelected = new Set(selectedUsers)
     if (newSelected.has(userId)) {
-      newSelected.delete(userId);
+      newSelected.delete(userId)
     } else {
-      newSelected.add(userId);
+      newSelected.add(userId)
     }
-    setSelectedUsers(newSelected);
-  };
+    setSelectedUsers(newSelected)
+  }
 
   const toggleAll = () => {
     if (selectedUsers.size === users.length) {
-      setSelectedUsers(new Set());
+      setSelectedUsers(new Set())
     } else {
-      setSelectedUsers(new Set(users.map((u) => u.id)));
+      setSelectedUsers(new Set(users.map((u) => u.id)))
     }
-  };
+  }
+
+  const insertEventLink = (eventId: string) => {
+    const event = events.find((e) => e.id === eventId)
+    if (!event) return
+
+    const eventUrl = `${window.location.origin}/events/${eventId}`
+    const eventDate = event.date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+    const eventTime = event.date.toLocaleTimeString('en-US', {
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    })
+
+    const linkText = `\n\nCheck out our upcoming event:\n${event.name}\n${eventDate} at ${eventTime}\nRegister here: ${eventUrl}\n`
+
+    setMessage((prev) => prev + linkText)
+  }
 
   const handleSendEmails = async () => {
     if (selectedUsers.size === 0) {
-      toast.error("Please select at least one recipient");
-      return;
+      toast.error('Please select at least one recipient')
+      return
     }
 
     if (!subject.trim()) {
-      toast.error("Please enter an email subject");
-      return;
+      toast.error('Please enter an email subject')
+      return
     }
 
     if (!message.trim()) {
-      toast.error("Please enter an email message");
-      return;
+      toast.error('Please enter an email message')
+      return
     }
 
     try {
-      setSending(true);
+      setSending(true)
 
       const selectedEmails = users
         .filter((u) => selectedUsers.has(u.id))
-        .map((u) => u.email);
+        .map((u) => u.email)
 
-      console.log(
-        `📧 Sending emails to ${selectedEmails.length} recipients...`,
-      );
-      console.log("Subject:", subject);
-      console.log("Recipients:", selectedEmails);
+      console.log(`📧 Sending emails to ${selectedEmails.length} recipients...`)
+      console.log('Subject:', subject)
+      console.log('Recipients:', selectedEmails)
 
       // Call the Edge Function to send emails
-      const result = await email.sendEmail(selectedEmails, subject, message);
+      const result = await email.sendEmail(selectedEmails, subject, message)
 
-      console.log("Email send result:", result);
+      console.log('Email send result:', result)
 
       // Handle different result scenarios
-      if ("failed" in result && result.failed && result.failed > 0) {
+      if ('failed' in result && result.failed && result.failed > 0) {
         // Partial or complete failure (207 status)
-        const totalAttempted = selectedEmails.length;
-        const successful = result.emailsSent || 0;
-        const failed = result.failed || 0;
+        const totalAttempted = selectedEmails.length
+        const successful = result.emailsSent || 0
+        const failed = result.failed || 0
 
         if (successful === 0) {
           // ALL emails failed
-          console.error("❌ All emails failed:", result.errors);
+          console.error('❌ All emails failed:', result.errors)
 
           // Show first error message if available
           const firstError =
             result.errors && result.errors.length > 0
               ? result.errors[0]
-              : "Unknown error";
+              : 'Unknown error'
 
           toast.error(`❌ Failed to send any emails. ${firstError}`, {
             duration: 8000,
-          });
-          return; // Don't clear form on complete failure
+          })
+          return // Don't clear form on complete failure
         } else {
           // SOME emails succeeded, SOME failed
           console.warn(
-            `⚠️ Partial success: ${successful}/${totalAttempted} sent`,
-          );
+            `⚠️ Partial success: ${successful}/${totalAttempted} sent`
+          )
 
           toast.error(
             `⚠️ Sent ${successful} of ${totalAttempted} emails. ${failed} failed.`,
-            { duration: 6000 },
-          );
+            { duration: 6000 }
+          )
 
           // Log errors for debugging
           if (result.errors) {
-            console.error("Failed email details:", result.errors);
+            console.error('Failed email details:', result.errors)
           }
         }
       } else {
         // Complete success (200 status)
-        console.log(`✅ Successfully sent ${result.emailsSent} emails`);
+        console.log(`✅ Successfully sent ${result.emailsSent} emails`)
 
         toast.success(
           `✅ Successfully sent email to ${result.emailsSent} recipient(s)!`,
-          { duration: 5000 },
-        );
+          { duration: 5000 }
+        )
       }
 
       // Clear form only if at least some emails succeeded
-      setSubject("");
-      setMessage("");
-      setSelectedUsers(new Set());
+      setSubject('')
+      setMessage('')
+      setSelectedUsers(new Set())
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Unknown error";
-      const errorName = error instanceof Error ? error.name : "";
+        error instanceof Error ? error.message : 'Unknown error'
+      const errorName = error instanceof Error ? error.name : ''
 
       if (
-        errorMessage.includes("AbortError") ||
-        errorMessage.includes("aborted") ||
-        errorName === "AbortError"
+        errorMessage.includes('AbortError') ||
+        errorMessage.includes('aborted') ||
+        errorName === 'AbortError'
       ) {
-        console.log("⚠️ Send emails aborted (component unmounted)");
-        return;
+        console.log('⚠️ Send emails aborted (component unmounted)')
+        return
       }
 
-      console.error("❌ Error sending emails:", error);
+      console.error('❌ Error sending emails:', error)
 
       // Check if it's a configuration error
       if (
-        errorMessage.includes("not configured") ||
-        errorMessage.includes("RESEND_API_KEY")
+        errorMessage.includes('not configured') ||
+        errorMessage.includes('RESEND_API_KEY')
       ) {
         toast.error(
-          "⚠️ Email service not configured. Please deploy the send-email Edge Function and add your RESEND_API_KEY to Supabase secrets.",
-          { duration: 8000 },
-        );
+          '⚠️ Email service not configured. Please deploy the send-email Edge Function and add your RESEND_API_KEY to Supabase secrets.',
+          { duration: 8000 }
+        )
       } else {
-        toast.error(errorMessage || "Failed to send emails");
+        toast.error(errorMessage || 'Failed to send emails')
       }
     } finally {
-      setSending(false);
+      setSending(false)
     }
-  };
+  }
 
   if (!user || !user.isAdmin) {
     return (
@@ -214,13 +308,13 @@ export function AdminEmailRoute() {
             <p className="text-center text-gray-600 mb-4">
               Admin access required
             </p>
-            <Button onClick={() => navigate("/events")} className="w-full">
+            <Button onClick={() => navigate('/events')} className="w-full">
               Go to Events
             </Button>
           </CardContent>
         </Card>
       </div>
-    );
+    )
   }
 
   return (
@@ -230,7 +324,7 @@ export function AdminEmailRoute() {
         <div className="mb-8">
           <Button
             variant="ghost"
-            onClick={() => navigate("/events")}
+            onClick={() => navigate('/events')}
             className="mb-4"
           >
             <ArrowLeft className="size-4 mr-2" />
@@ -260,12 +354,44 @@ export function AdminEmailRoute() {
                 <CardTitle>Select Recipients</CardTitle>
                 <Button variant="outline" size="sm" onClick={toggleAll}>
                   {selectedUsers.size === users.length
-                    ? "Deselect All"
-                    : "Select All"}
+                    ? 'Deselect All'
+                    : 'Select All'}
                 </Button>
               </div>
             </CardHeader>
             <CardContent>
+              {/* Event Filter Dropdown */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <Filter className="size-4 inline mr-1" />
+                  Filter by Event
+                </label>
+                <Select
+                  value={selectedEventFilter}
+                  onValueChange={setSelectedEventFilter}
+                  disabled={eventsLoading}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Users" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Users</SelectItem>
+                    {events
+                      .filter((event) => event.status !== 'cancelled')
+                      .sort((a, b) => b.date.getTime() - a.date.getTime())
+                      .map((event) => (
+                        <SelectItem key={event.id} value={event.id}>
+                          {event.name} - {event.date.toLocaleDateString()}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+                {selectedEventFilter !== 'all' && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                    Showing only ticket holders for selected event
+                  </p>
+                )}
+              </div>
               {loading ? (
                 <p className="text-gray-500 text-center py-4">
                   Loading users...
@@ -286,7 +412,7 @@ export function AdminEmailRoute() {
                       />
                       <div className="flex-1 min-w-0">
                         <p className="font-medium truncate">
-                          {userProfile.full_name || "No Name"}
+                          {userProfile.full_name || 'No Name'}
                         </p>
                         <p className="text-sm text-gray-600 dark:text-gray-400 truncate">
                           {userProfile.email}
@@ -321,9 +447,53 @@ export function AdminEmailRoute() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Message
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Message
+                  </label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        type="button"
+                        disabled={eventsLoading || events.length === 0}
+                      >
+                        <LinkIcon className="size-4 mr-1" />
+                        Insert Event Link
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-80">
+                      {events
+                        .filter((event) => event.status !== 'cancelled')
+                        .sort((a, b) => a.date.getTime() - b.date.getTime())
+                        .slice(0, 10)
+                        .map((event) => (
+                          <DropdownMenuItem
+                            key={event.id}
+                            onClick={() => insertEventLink(event.id)}
+                            className="flex flex-col items-start gap-1 py-3"
+                          >
+                            <span className="font-medium">{event.name}</span>
+                            <span className="text-xs text-gray-500">
+                              {event.date.toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric',
+                              })}
+                            </span>
+                          </DropdownMenuItem>
+                        ))}
+                      {events.filter((e) => e.status !== 'cancelled').length ===
+                        0 && (
+                        <div className="px-2 py-3 text-sm text-gray-500">
+                          No upcoming events
+                        </div>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
                 <Textarea
                   placeholder="Enter your message here..."
                   value={message}
@@ -347,7 +517,7 @@ export function AdminEmailRoute() {
                 >
                   <Send className="size-4 mr-2" />
                   {sending
-                    ? "Sending..."
+                    ? 'Sending...'
                     : `Send to ${selectedUsers.size} User(s)`}
                 </Button>
               </div>
@@ -355,12 +525,12 @@ export function AdminEmailRoute() {
               {selectedUsers.size > 0 && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
                   <p className="text-sm text-blue-800 dark:text-blue-200">
-                    <strong>Recipients:</strong>{" "}
+                    <strong>Recipients:</strong>{' '}
                     {users
                       .filter((u) => selectedUsers.has(u.id))
                       .map((u) => u.email)
                       .slice(0, 3)
-                      .join(", ")}
+                      .join(', ')}
                     {selectedUsers.size > 3 &&
                       ` +${selectedUsers.size - 3} more`}
                   </p>
@@ -371,5 +541,5 @@ export function AdminEmailRoute() {
         </div>
       </div>
     </div>
-  );
+  )
 }
